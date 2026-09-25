@@ -91,6 +91,20 @@ const GEOMETRY_MODE_ADDENDUM = `
   }
 Если что-то посчитать невозможно даже приблизительно — оставь null, не выдумывай.`;
 
+const CLASSIFY_PROMPT = `Тебе присылают по порядку уменьшенные страницы дизайн-проекта квартиры или дома.
+Для КАЖДОЙ страницы определи, что на ней, по названию листа (в штампе или заголовке) и по содержимому.
+Категории:
+"ceiling" — план потолка / потолков, план натяжных потолков, ведомость натяжных потолков,
+  спецификация отделки потолка, спецификация потолочных карнизов;
+"elevations" — развёртки стен;
+"lighting" — план освещения / расстановки светильников, спецификация светильников;
+"index" — титульный лист, содержание, ведомость листов;
+"other" — всё остальное (обмерный план, перегородки, мебель, сантехника, розетки и выключатели,
+  полы, плитка, двери, тёплый пол, вентиляция и т.п.).
+Ответь СТРОГО одним JSON-объектом без пояснений и без markdown:
+{"pages":[{"n":1,"title":"название листа как напечатано","category":"..."}]}
+n — порядковый номер страницы в ЭТОМ запросе, начиная с 1. Ровно одна запись на каждую страницу.`;
+
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -121,6 +135,9 @@ export default {
     const images = Array.isArray(body.images) ? body.images : [];
     if (!images.length) {
       return json({ error: "Не переданы изображения чертежа" }, 400);
+    }
+    if (body.mode === "classify") {
+      return classifyPages(images, env);
     }
     if (images.length > 12) {
       return json({ error: "Слишком много страниц за один раз (максимум 12)" }, 400);
@@ -182,6 +199,51 @@ export default {
     return json(parsed, 200);
   },
 };
+
+// Быстрое определение, какие листы проекта нужны для расчёта (по уменьшенным картинкам)
+async function classifyPages(images, env) {
+  if (images.length > 20) {
+    return json({ error: "Слишком много страниц для определения за раз (максимум 20)" }, 400);
+  }
+  const content = [];
+  images.forEach((img, i) => {
+    if (!img.data || !img.mediaType) return;
+    content.push({ type: "text", text: `Страница ${i + 1}:` });
+    content.push({ type: "image", source: { type: "base64", media_type: img.mediaType, data: img.data } });
+  });
+  content.push({ type: "text", text: "Определи категорию каждой страницы и верни только JSON." });
+
+  let dsRes;
+  try {
+    dsRes = await fetch(DEEPSEEK_ANTHROPIC_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": env.DEEPSEEK_API_KEY,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: DEEPSEEK_MODEL,
+        max_tokens: 4000,
+        system: CLASSIFY_PROMPT,
+        messages: [{ role: "user", content }],
+      }),
+    });
+  } catch (e) {
+    return json({ error: "Не удалось связаться с ИИ: " + e.message }, 502);
+  }
+  if (!dsRes.ok) {
+    return json({ error: "Ошибка ИИ-сервиса: " + (await dsRes.text()) }, 502);
+  }
+  const data = await dsRes.json();
+  const textBlocks = (data.content || []).filter((b) => b.type === "text");
+  const rawText = textBlocks.length ? textBlocks[textBlocks.length - 1].text : "";
+  const parsed = extractJson(rawText);
+  if (parsed === null || !Array.isArray(parsed.pages)) {
+    return json({ error: "ИИ вернул нераспознаваемый ответ", raw: rawText }, 502);
+  }
+  return json(parsed, 200);
+}
 
 // Убирает markdown-обёртку и достаёт JSON-объект, даже если вокруг есть лишний текст.
 function extractJson(rawText) {

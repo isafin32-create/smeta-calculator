@@ -22,10 +22,17 @@
   .dropzone{border:2px dashed var(--border);border-radius:8px;padding:28px 12px;text-align:center;cursor:pointer;color:var(--muted);}
   .dropzone.drag{background:var(--highlight);border-color:var(--accent);}
   .dropzone strong{display:block;color:var(--text);font-size:15px;margin-bottom:4px;}
-  .thumbs{display:flex;gap:8px;margin:12px 0;flex-wrap:wrap;}
-  .thumb{width:70px;height:90px;border:2px solid var(--border);border-radius:4px;overflow:hidden;cursor:pointer;background:#f2f0ea;}
+  .thumbs{display:flex;gap:8px;margin:12px 0;flex-wrap:wrap;max-height:300px;overflow-y:auto;}
+  .thumb{position:relative;width:78px;height:104px;border:2px solid var(--border);border-radius:4px;overflow:hidden;cursor:pointer;background:#f2f0ea;opacity:.55;}
   .thumb img{width:100%;height:100%;object-fit:cover;}
-  .thumb.active{border-color:var(--accent);}
+  .thumb.sel{border-color:#2c8a4e;opacity:1;}
+  .thumb.active{outline:3px solid var(--accent);outline-offset:-1px;opacity:1;}
+  .thumb .pg{position:absolute;top:2px;left:3px;background:rgba(255,255,255,.9);font-size:10px;padding:0 3px;border-radius:3px;}
+  .thumb input{position:absolute;top:2px;right:2px;margin:0;width:16px;height:16px;cursor:pointer;}
+  .thumb .cat{position:absolute;left:0;right:0;bottom:0;background:rgba(43,43,43,.78);color:#fff;font-size:9.5px;line-height:1.25;padding:2px 3px;text-align:center;}
+  .thumb.sel .cat{background:rgba(44,138,78,.92);}
+  .sel-summary{font-size:12.5px;color:var(--muted);line-height:1.5;margin-bottom:10px;}
+  .sel-summary strong{color:var(--text);}
   .preview{border:1px solid var(--border);border-radius:6px;overflow:auto;max-height:520px;text-align:center;background:#f2f0ea;}
   .preview img{max-width:100%;display:block;margin:0 auto;}
   .ai-row{display:flex;align-items:center;gap:14px;margin-top:14px;flex-wrap:wrap;}
@@ -99,11 +106,12 @@
 
     <div class="dropzone" id="dropzone">
       <strong>Загрузить чертёж</strong>
-      PDF или изображение (план потолка / помещений)
+      Весь PDF проекта целиком — программа сама найдёт план потолка и развёртки
       <input type="file" id="fileInput" accept="application/pdf,image/*" multiple style="display:none;">
     </div>
 
     <div class="thumbs" id="thumbs"></div>
+    <div class="sel-summary" id="selSummary"></div>
     <div class="preview" id="preview"></div>
 
     <div class="ai-row">
@@ -203,7 +211,8 @@ const DEFAULT_SERVER_URL = "https://smeta-ai-reader.islam-pragma.workers.dev";
 
 let reference = JSON.parse(localStorage.getItem(LS_REF) || "null") || DEFAULT_REF.slice();
 let rows = []; // {name, unit, qty, price}
-let pages = []; // {dataUrl, mediaType, base64}
+// Страница: {src:'pdf'|'image', pdf, pageNum, thumbUrl, preview, dataUrl, mediaType, base64, category, selected}
+let pages = [];
 let activePage = 0;
 
 // ---------- Справочник ----------
@@ -502,11 +511,30 @@ dropzone.onclick = () => fileInput.click();
 dropzone.addEventListener("drop", e => { handleFiles(e.dataTransfer.files); });
 fileInput.addEventListener("change", e => handleFiles(e.target.files));
 
+// Какие листы нужны для расчёта и в каком порядке важности
+const CATS = {
+  ceiling:    {label:"План потолка",   prio:3, auto:true},
+  elevations: {label:"Развёртки",      prio:2, auto:true},
+  lighting:   {label:"Освещение",      prio:1, auto:true},
+  image:      {label:"Картинка",       prio:2, auto:true},
+  index:      {label:"Оглавление",     prio:0, auto:false},
+  other:      {label:"не нужен",       prio:0, auto:false},
+  unknown:    {label:"?",              prio:0, auto:false},
+};
+const MAX_SELECTED = 20;   // больше листов в расчёт не отправляем
+const BATCH_SIZE = 6;      // листов в одном запросе к ИИ (чтобы не было пустых ответов)
+
+function setStatus(text){ document.getElementById("selSummary").innerHTML = text; }
+
 async function handleFiles(fileList){
   const files = Array.from(fileList);
   if (!files.length) return;
   pages = [];
   document.getElementById("fileNameLabel").textContent = files.map(f=>f.name).join(", ");
+  document.getElementById("recognizeBtn").disabled = true;
+  document.getElementById("aiOutput").innerHTML = "";
+  aiDraft = null;
+  aiEstimates = null;
 
   for (const file of files){
     if (file.type === "application/pdf"){
@@ -515,39 +543,143 @@ async function handleFiles(fileList){
       await addImagePage(file);
     }
   }
+
+  // Если по тексту не нашли ни плана потолка, ни развёрток — просим ИИ определить листы по картинкам
+  const pdfPages = pages.filter(p => p.src === "pdf");
+  const foundKey = pdfPages.some(p => p.category === "ceiling" || p.category === "elevations");
+  if (pdfPages.length && !foundKey){
+    await classifyWithAi(pdfPages.filter(p => p.category !== "index"));
+  }
+
+  autoSelect();
+  activePage = Math.max(0, pages.findIndex(p => p.selected));
   renderThumbs();
-  if (pages.length){ activePage = 0; renderPreview(); }
-  document.getElementById("recognizeBtn").disabled = pages.length === 0;
-  document.getElementById("aiOutput").innerHTML = "";
-  aiDraft = null;
-  aiEstimates = null;
+  renderPreview();
+  renderSelectionSummary();
+  document.getElementById("recognizeBtn").disabled = !pages.some(p => p.selected);
 }
 
 function addImagePage(file){
   return new Promise(resolve => {
     const reader = new FileReader();
     reader.onload = () => {
-      pages.push({dataUrl: reader.result, mediaType: file.type, base64: reader.result.split(",")[1]});
+      pages.push({src:"image", dataUrl: reader.result, thumbUrl: reader.result, mediaType: file.type,
+                  base64: reader.result.split(",")[1], category:"image", selected:false});
       resolve();
     };
     reader.readAsDataURL(file);
   });
 }
 
+async function renderPdfPage(p, scale, type, quality){
+  const page = await p.pdf.getPage(p.pageNum);
+  const viewport = page.getViewport({scale});
+  const canvas = document.createElement("canvas");
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  await page.render({canvasContext: ctx, viewport}).promise;
+  const url = canvas.toDataURL(type || "image/png", quality);
+  canvas.width = canvas.height = 0; // освобождаем память
+  return url;
+}
+
 async function addPdfPages(file){
   const buf = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({data: buf}).promise;
-  const maxPages = Math.min(pdf.numPages, 12);
-  for (let i = 1; i <= maxPages; i++){
-    const page = await pdf.getPage(i);
-    const viewport = page.getViewport({scale: 2.2});
-    const canvas = document.createElement("canvas");
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-    await page.render({canvasContext: canvas.getContext("2d"), viewport}).promise;
-    const dataUrl = canvas.toDataURL("image/png");
-    pages.push({dataUrl, mediaType: "image/png", base64: dataUrl.split(",")[1]});
+  for (let i = 1; i <= pdf.numPages; i++){
+    setStatus(`Читаю проект: лист ${i} из ${pdf.numPages}…`);
+    const p = {src:"pdf", pdf, pageNum:i, category:"unknown", selected:false};
+    p.thumbUrl = await renderPdfPage(p, 0.3, "image/jpeg", 0.7);
+    try {
+      const page = await pdf.getPage(i);
+      const tc = await page.getTextContent();
+      p.category = classifyByText(tc.items.map(it => it.str).join(" ")) || "unknown";
+    } catch(e){ p.category = "unknown"; }
+    pages.push(p);
   }
+}
+
+// Определение листа по тексту PDF (бесплатно, без ИИ). null — если текстового слоя нет.
+function classifyByText(text){
+  const t = (text || "").toLowerCase().replace(/ё/g, "е").replace(/\s+/g, "");
+  if (t.length < 15) return null;
+  const titleHits = ["планпотолк","развертк","планосвещ","планрасстановкимебел","планполов","обмерныйплан"]
+    .filter(x => t.includes(x)).length;
+  if (/ведомость(рабочих)?(чертежей|листов)|содержаниепроекта|составпроекта/.test(t) || titleHits >= 3) return "index";
+  if (/планпотолк|потолочн[а-я]*план|планнатяжн|ведомостьнатяжн|спецификаци[а-я]*отделк[а-я]*потолк|отделк[а-я]потолк/.test(t)) return "ceiling";
+  if (/развертк/.test(t)) return "elevations";
+  if (/планосвещ|планрасстановкисветил|спецификаци[а-я]*светил/.test(t)) return "lighting";
+  return "other";
+}
+
+// Резерв для сканов без текста: ИИ смотрит уменьшенные листы и называет их
+async function classifyWithAi(list){
+  if (!list.length) return;
+  const serverUrl = localStorage.getItem(LS_SERVER) || DEFAULT_SERVER_URL;
+  const CHUNK = 16;
+  for (let s = 0; s < list.length; s += CHUNK){
+    const chunk = list.slice(s, s + CHUNK);
+    setStatus(`Определяю, какие листы нужны (ИИ смотрит листы ${s+1}–${s+chunk.length} из ${list.length})…`);
+    try {
+      const images = [];
+      for (const p of chunk){
+        const url = await renderPdfPage(p, 0.9, "image/jpeg", 0.6);
+        images.push({mediaType:"image/jpeg", data:url.split(",")[1]});
+      }
+      const resp = await fetch(serverUrl, {method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({mode:"classify", images})});
+      const data = await resp.json();
+      (data.pages || []).forEach(r => {
+        const p = chunk[(r.n || 0) - 1];
+        if (p && CATS[r.category]) p.category = r.category;
+      });
+    } catch(e){ /* не получилось — оставим как есть, пользователь выберет вручную */ }
+  }
+}
+
+function autoSelect(){
+  pages.forEach(p => { p.selected = !!(CATS[p.category] && CATS[p.category].auto); });
+  let sel = pages.filter(p => p.selected);
+  if (!sel.length){
+    // Ничего не распознали — по-старому берём первые листы, пусть человек поправит галочками
+    pages.slice(0, 12).forEach(p => p.selected = true);
+    return;
+  }
+  if (sel.length > MAX_SELECTED){
+    sel.sort((a,b) => CATS[b.category].prio - CATS[a.category].prio);
+    sel.slice(MAX_SELECTED).forEach(p => p.selected = false);
+  }
+}
+
+function pageRanges(nums){
+  const out = [];
+  nums.sort((a,b)=>a-b).forEach(n => {
+    const last = out[out.length-1];
+    if (last && n === last[1] + 1) last[1] = n; else out.push([n, n]);
+  });
+  return out.map(([a,b]) => a === b ? `${a}` : `${a}–${b}`).join(", ");
+}
+
+function renderSelectionSummary(){
+  if (!pages.length){ setStatus(""); return; }
+  const sel = pages.map((p,i) => ({p, n:i+1})).filter(x => x.p.selected);
+  const groups = {};
+  sel.forEach(x => { (groups[x.p.category] = groups[x.p.category] || []).push(x.n); });
+  const parts = Object.keys(groups).map(c => `${(CATS[c]||CATS.unknown).label} — л. ${pageRanges(groups[c])}`);
+  let html = `Всего листов: <strong>${pages.length}</strong>. В расчёт пойдут: <strong>${sel.length}</strong>`;
+  if (parts.length) html += ` (${parts.join("; ")})`;
+  html += `. Лишнее или пропущенное можно поправить галочками на миниатюрах.`;
+  if (!pages.some(p => p.category === "ceiling") && pages.some(p => p.src === "pdf")){
+    html += `<br><span style="color:#a06a1a;">⚠ План потолка в проекте не найден — площадь полотна может не посчитаться. Если он есть, отметь его галочкой.</span>`;
+  }
+  if (sel.length > MAX_SELECTED){
+    html += `<br><span style="color:var(--danger);">Отмечено больше ${MAX_SELECTED} листов — лишние не отправятся, сними галочки с ненужных.</span>`;
+  }
+  setStatus(html);
+  document.getElementById("recognizeBtn").disabled = sel.length === 0;
 }
 
 function renderThumbs(){
@@ -555,21 +687,37 @@ function renderThumbs(){
   el.innerHTML = "";
   pages.forEach((p, idx) => {
     const div = document.createElement("div");
-    div.className = "thumb" + (idx === activePage ? " active" : "");
+    div.className = "thumb" + (p.selected ? " sel" : "") + (idx === activePage ? " active" : "");
+    div.title = "Лист " + (idx+1);
     const img = document.createElement("img");
-    img.src = p.dataUrl;
+    img.src = p.thumbUrl;
     div.appendChild(img);
+    const pg = document.createElement("span"); pg.className = "pg"; pg.textContent = idx + 1; div.appendChild(pg);
+    const cat = document.createElement("span"); cat.className = "cat"; cat.textContent = (CATS[p.category]||CATS.unknown).label; div.appendChild(cat);
+    const cb = document.createElement("input");
+    cb.type = "checkbox"; cb.checked = p.selected; cb.title = "Отправить этот лист в расчёт";
+    cb.onclick = e => { e.stopPropagation(); p.selected = cb.checked; renderThumbs(); renderSelectionSummary(); };
+    div.appendChild(cb);
     div.onclick = () => { activePage = idx; renderPreview(); renderThumbs(); };
     el.appendChild(div);
   });
 }
 
-function renderPreview(){
+async function renderPreview(){
   const el = document.getElementById("preview");
   el.innerHTML = "";
   if (!pages.length) return;
+  const idx = activePage;
+  const p = pages[idx];
+  let url = p.src === "image" ? p.dataUrl : p.preview;
+  if (!url){
+    el.innerHTML = `<div style="padding:20px;color:var(--muted);font-size:13px;">Загружаю лист…</div>`;
+    url = p.preview = await renderPdfPage(p, 1.4, "image/jpeg", 0.85);
+    if (activePage !== idx) return;
+    el.innerHTML = "";
+  }
   const img = document.createElement("img");
-  img.src = pages[activePage].dataUrl;
+  img.src = url;
   el.appendChild(img);
 }
 
@@ -582,36 +730,83 @@ document.getElementById("serverBtn").onclick = () => {
   toast("Адрес сервера сохранён");
 };
 
+async function pageForAi(p){
+  if (p.src === "image") return {mediaType: p.mediaType, data: p.base64};
+  const url = await renderPdfPage(p, 2.2, "image/png");
+  return {mediaType: "image/png", data: url.split(",")[1]};
+}
+
+// Запускает задачи не больше limit одновременно
+async function runLimited(tasks, limit){
+  const results = new Array(tasks.length);
+  let next = 0;
+  async function worker(){
+    while (next < tasks.length){
+      const i = next++;
+      results[i] = await tasks[i]();
+    }
+  }
+  await Promise.all(Array.from({length: Math.min(limit, tasks.length)}, worker));
+  return results;
+}
+
 document.getElementById("recognizeBtn").onclick = async () => {
   const serverUrl = localStorage.getItem(LS_SERVER) || DEFAULT_SERVER_URL;
   const out = document.getElementById("aiOutput");
-  if (!pages.length) return;
-
   const btn = document.getElementById("recognizeBtn");
+
+  let selected = pages.map((p, i) => ({p, n: i + 1})).filter(x => x.p.selected);
+  if (!selected.length) return;
+  // Самое важное — в начало: план потолка, потом развёртки, потом остальное
+  selected.sort((a, b) => ((CATS[b.p.category]||CATS.unknown).prio - (CATS[a.p.category]||CATS.unknown).prio) || (a.n - b.n));
+  selected = selected.slice(0, MAX_SELECTED);
+
+  const batches = [];
+  for (let i = 0; i < selected.length; i += BATCH_SIZE) batches.push(selected.slice(i, i + BATCH_SIZE));
+
   btn.disabled = true;
-  btn.textContent = "Считаю...";
   out.innerHTML = "";
+  const geometryMode = document.getElementById("geometryModeCheckbox").checked;
+  let done = 0;
+  btn.textContent = `Считаю… 0 из ${batches.length}`;
 
   try {
-    const geometryMode = document.getElementById("geometryModeCheckbox").checked;
-    const resp = await fetch(serverUrl, {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({
-        images: pages.map(p => ({mediaType: p.mediaType, data: p.base64})),
-        geometryMode
-      })
-    });
-    const data = await resp.json();
-    if (!resp.ok || data.error){
-      let msg = `Не удалось распознать: ${escapeHtml(data.error || "неизвестная ошибка")}`;
-      if (data.raw !== undefined) {
-        const rawDisplay = data.raw ? escapeHtml(data.raw) : "(пустой ответ — модель ничего не вернула в текстовом блоке)";
+    const results = await runLimited(batches.map(batch => async () => {
+      try {
+        const images = [];
+        for (const x of batch) images.push(await pageForAi(x.p));
+        const resp = await fetch(serverUrl, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({images, geometryMode})
+        });
+        const data = await resp.json();
+        if (!resp.ok || data.error) return {error: data.error || "неизвестная ошибка", raw: data.raw, pagesNums: batch.map(x => x.n)};
+        return {data, pagesNums: batch.map(x => x.n)};
+      } catch (e){
+        return {error: e.message, pagesNums: batch.map(x => x.n)};
+      } finally {
+        done++;
+        btn.textContent = `Считаю… ${done} из ${batches.length}`;
+      }
+    }), 3);
+
+    const ok = results.filter(r => r.data);
+    const failed = results.filter(r => r.error);
+    if (!ok.length){
+      const r = failed[0] || {};
+      let msg = `Не удалось распознать: ${escapeHtml(r.error || "неизвестная ошибка")}`;
+      if (r.raw !== undefined) {
+        const rawDisplay = r.raw ? escapeHtml(r.raw) : "(пустой ответ — модель ничего не вернула в текстовом блоке)";
         msg += `<div style="margin-top:8px;padding-top:8px;border-top:1px solid #eecdc9;"><strong>Что вернул ИИ:</strong><br>${rawDisplay}</div>`;
       }
       out.innerHTML = `<div class="ai-error">${msg}</div>`;
       return;
     }
+
+    const data = mergeResults(ok.map(r => r.data));
+    data._usedPages = ok.flatMap(r => r.pagesNums);
+    data._failedPages = failed.flatMap(r => r.pagesNums);
     renderAiResult(data);
     computeAiDraft(data);
     aiEstimates = (geometryMode && data.geometry_estimates) ? data.geometry_estimates : null;
@@ -624,10 +819,59 @@ document.getElementById("recognizeBtn").onclick = async () => {
   }
 };
 
+// Склеивает ответы по нескольким порциям листов в один
+function mergeResults(list){
+  if (list.length === 1) return list[0];
+  const m = {};
+  const arrays = {
+    fixtures: f => `${f.name}|${f.qty}`,
+    ceiling_profiles: p => `${p.mark}|${p.length_m}`,
+    curtain_cornices: c => `${c.mark}|${c.length_m}|${c.qty}`,
+    ceiling_material_areas: a => `${(a.material||"").toLowerCase()}|${a.area_sqm}`,
+    rooms: r => `${(r.name||"").toLowerCase()}|${r.area_sqm}`,
+    ceiling_zones: z => `${z.room_number}|${(z.material||"").toLowerCase()}|${z.area_sqm}`,
+    wall_elevation_perimeters: w => `${(w.room||"").toLowerCase()}|${w.perimeter_m}`,
+  };
+  Object.keys(arrays).forEach(k => {
+    const seen = new Set();
+    m[k] = [];
+    list.forEach(d => (Array.isArray(d[k]) ? d[k] : []).forEach(item => {
+      const key = arrays[k](item);
+      if (!seen.has(key)){ seen.add(key); m[k].push(item); }
+    }));
+  });
+  // Площадь/периметр: сначала из ведомости, иначе первое найденное
+  const pick = (valKey, srcKey) => {
+    const fromTable = list.find(d => d[valKey] != null && d[srcKey] === "ведомость");
+    const any = fromTable || list.find(d => d[valKey] != null);
+    m[valKey] = any ? any[valKey] : null;
+    m[srcKey] = any ? any[srcKey] : "не найдено";
+  };
+  pick("area_sqm", "area_source");
+  pick("perimeter_m", "perimeter_source");
+  m.profile_type = (list.find(d => d.profile_type) || {}).profile_type || null;
+  const notes = [...new Set(list.map(d => d.area_note).filter(Boolean))];
+  m.area_note = notes.length ? notes.join(" ") : null;
+  const ests = list.map(d => d.geometry_estimates).filter(Boolean);
+  if (ests.length){
+    const g = {};
+    ["perimeter_estimate_m","corner_count_estimate","linear_light_length_estimate_m","linear_light_corners_estimate",
+     "builtin_fixture_count_estimate","pendant_fixture_count_estimate"].forEach(k => {
+      const e = ests.find(x => x[k] != null);
+      g[k] = e ? e[k] : null;
+    });
+    g.confidence_note = [...new Set(ests.map(x => x.confidence_note).filter(Boolean))].join(" ");
+    m.geometry_estimates = g;
+  }
+  return m;
+}
+
 // Считает безопасные (табличные, не по значкам) числа и кладёт их в aiDraft —
 // они автоматически подставятся в поле "Кол-во", когда кликаешь позицию в справочнике.
 function computeAiDraft(data){
-  const draft = { area_sqm: data.area_sqm ?? null, shadowProfileLen: null, standardProfileLen: null, electroCorniceLen: null };
+  // Общую площадь берём только из ведомости. «Сумма по таблице помещений» — обычно площадь ПОЛА, её не подставляем.
+  const draft = { area_sqm: (data.area_source === "ведомость" ? (data.area_sqm ?? null) : null),
+                  shadowProfileLen: null, standardProfileLen: null, electroCorniceLen: null };
 
   // Самый прямой источник: сводная таблица "материал потолка — площадь" (любое название)
   if (Array.isArray(data.ceiling_material_areas) && data.ceiling_material_areas.length){
@@ -762,6 +1006,12 @@ function renderAiResult(data){
   const out = document.getElementById("aiOutput");
   const breakdown = computeCeilingBreakdown(data);
   let html = `<div class="ai-result"><h3>Черновые данные с чертежа</h3>`;
+  if (Array.isArray(data._usedPages) && data._usedPages.length){
+    html += `<div class="src" style="margin-bottom:6px;">Посчитано по листам: ${pageRanges(data._usedPages.slice())}</div>`;
+  }
+  if (Array.isArray(data._failedPages) && data._failedPages.length){
+    html += `<div class="note">⚠ Листы ${pageRanges(data._failedPages.slice())} не удалось обработать (ошибка сервера) — нажми «Считать» ещё раз или сними с них галочки.</div>`;
+  }
 
   if (Array.isArray(data.ceiling_material_areas) && data.ceiling_material_areas.length){
     html += `<div class="row" style="margin-top:8px;"><strong>Площадь по типам отделки потолка (сводная таблица):</strong></div>`;
@@ -787,9 +1037,17 @@ function renderAiResult(data){
       html += `</table>`;
     }
   } else {
-    html += `<div class="row"><strong>Площадь:</strong> ${data.area_sqm ?? "не найдено"} ${data.area_sqm ? "м²" : ""}`;
-    if (data.area_source) html += ` <span class="src">(${escapeHtml(data.area_source)})</span>`;
-    html += `</div>`;
+    const floorOnly = data.area_sqm != null && data.area_source !== "ведомость"
+      && !(Array.isArray(data.ceiling_material_areas) && data.ceiling_material_areas.length)
+      && !(Array.isArray(data.rooms) && data.rooms.some(r => /потолок|потолк|полотн|натяжн/i.test(r.area_kind || "")));
+    if (floorOnly){
+      html += `<div class="row"><strong>Площадь полотна:</strong> не найдено</div>`;
+      html += `<div class="note">⚠ На листах есть только площадь ПОЛА помещений — ${data.area_sqm} м² (${escapeHtml(data.area_source || "")}). Это не площадь натяжного полотна, в «Полотно» она не подставляется. Нужен план потолка или ведомость натяжных потолков.</div>`;
+    } else {
+      html += `<div class="row"><strong>Площадь:</strong> ${data.area_sqm ?? "не найдено"} ${data.area_sqm ? "м²" : ""}`;
+      if (data.area_source) html += ` <span class="src">(${escapeHtml(data.area_source)})</span>`;
+      html += `</div>`;
+    }
   }
   if (data.area_note) html += `<div class="note">⚠ ${escapeHtml(data.area_note)}</div>`;
 
