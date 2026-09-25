@@ -159,46 +159,53 @@ export default {
 
     const systemPrompt = SYSTEM_PROMPT + (geometryMode ? GEOMETRY_MODE_ADDENDUM : "");
 
-    let dsRes;
-    try {
-      dsRes = await fetch(DEEPSEEK_ANTHROPIC_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": env.DEEPSEEK_API_KEY,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model: DEEPSEEK_MODEL,
-          max_tokens: geometryMode ? 48000 : 16000,
-          thinking: { type: "enabled", budget_tokens: geometryMode ? 24000 : 8000 },
-          system: systemPrompt,
-          messages: [{ role: "user", content }],
-        }),
-      });
-    } catch (e) {
-      return json({ error: "Не удалось связаться с ИИ: " + e.message }, 502);
+    // 1-я попытка — с рассуждением; если ответа нет (модель «выговорилась» в рассуждении
+    // и не дошла до JSON) — 2-я попытка без рассуждения.
+    const attempts = [
+      { max_tokens: geometryMode ? 48000 : 24000, thinking: { type: "enabled", budget_tokens: geometryMode ? 24000 : 8000 } },
+      { max_tokens: 16000, thinking: null },
+    ];
+    let lastRaw = "", lastStop = "";
+    for (const a of attempts) {
+      const r = await callModel(env, systemPrompt, content, a.max_tokens, a.thinking);
+      if (r.error) return json({ error: r.error }, 502);
+      lastRaw = r.text; lastStop = r.stop;
+      const parsed = extractJson(r.text) ?? extractJson(r.thinkingText);
+      if (parsed !== null) return json(parsed, 200);
     }
-
-    if (!dsRes.ok) {
-      const errText = await dsRes.text();
-      return json({ error: "Ошибка ИИ-сервиса: " + errText }, 502);
-    }
-
-    const data = await dsRes.json();
-    // Если модель вернула несколько текстовых блоков (например, отдельно "рассуждение"),
-    // берём последний — финальный ответ обычно идёт последним.
-    const textBlocks = (data.content || []).filter((b) => b.type === "text");
-    const rawText = textBlocks.length ? textBlocks[textBlocks.length - 1].text : "";
-
-    const parsed = extractJson(rawText);
-    if (parsed === null) {
-      return json({ error: "ИИ вернул нераспознаваемый ответ", raw: rawText }, 502);
-    }
-
-    return json(parsed, 200);
+    return json({ error: "ИИ вернул нераспознаваемый ответ (stop_reason: " + (lastStop || "?") + ")", raw: lastRaw }, 502);
   },
 };
+
+async function callModel(env, system, content, maxTokens, thinking) {
+  const payload = { model: DEEPSEEK_MODEL, max_tokens: maxTokens, system, messages: [{ role: "user", content }] };
+  if (thinking) payload.thinking = thinking;
+  let res;
+  try {
+    res = await fetch(DEEPSEEK_ANTHROPIC_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": env.DEEPSEEK_API_KEY,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch (e) {
+    return { error: "Не удалось связаться с ИИ: " + e.message };
+  }
+  if (!res.ok) return { error: "Ошибка ИИ-сервиса: " + (await res.text()) };
+  const data = await res.json();
+  const blocks = data.content || [];
+  const texts = blocks.filter((b) => b.type === "text").map((b) => b.text || "");
+  const thinks = blocks.filter((b) => b.type === "thinking").map((b) => b.thinking || "");
+  return {
+    text: texts.length ? texts[texts.length - 1] : "",
+    thinkingText: thinks.join("\n"),
+    stop: data.stop_reason || "",
+  };
+}
+
 
 // Быстрое определение, какие листы проекта нужны для расчёта (по уменьшенным картинкам)
 async function classifyPages(images, env) {

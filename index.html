@@ -771,7 +771,8 @@ document.getElementById("recognizeBtn").onclick = async () => {
   btn.textContent = `Считаю… 0 из ${batches.length}`;
 
   try {
-    const results = await runLimited(batches.map(batch => async () => {
+    // Одна порция; если ИИ вернул пустой ответ — делим порцию пополам и пробуем снова
+    const sendBatch = async (batch) => {
       try {
         const images = [];
         for (const x of batch) images.push(await pageForAi(x.p));
@@ -781,15 +782,28 @@ document.getElementById("recognizeBtn").onclick = async () => {
           body: JSON.stringify({images, geometryMode})
         });
         const data = await resp.json();
-        if (!resp.ok || data.error) return {error: data.error || "неизвестная ошибка", raw: data.raw, pagesNums: batch.map(x => x.n)};
-        return {data, pagesNums: batch.map(x => x.n)};
+        if (!resp.ok || data.error) return [{error: data.error || "неизвестная ошибка", raw: data.raw, pagesNums: batch.map(x => x.n)}];
+        return [{data, pagesNums: batch.map(x => x.n)}];
       } catch (e){
-        return {error: e.message, pagesNums: batch.map(x => x.n)};
-      } finally {
-        done++;
-        btn.textContent = `Считаю… ${done} из ${batches.length}`;
+        return [{error: e.message, pagesNums: batch.map(x => x.n)}];
       }
+    };
+    const processBatch = async (batch) => {
+      const r = await sendBatch(batch);
+      if (r[0].error && batch.length > 1){
+        const half = Math.ceil(batch.length / 2);
+        btn.textContent = `Считаю… ${done} из ${batches.length} (делю порцию)`;
+        return [...await processBatch(batch.slice(0, half)), ...await processBatch(batch.slice(half))];
+      }
+      return r;
+    };
+    const nested = await runLimited(batches.map(batch => async () => {
+      const r = await processBatch(batch);
+      done++;
+      btn.textContent = `Считаю… ${done} из ${batches.length}`;
+      return r;
     }), 3);
+    const results = nested.flat();
 
     const ok = results.filter(r => r.data);
     const failed = results.filter(r => r.error);
