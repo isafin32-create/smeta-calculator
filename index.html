@@ -629,6 +629,16 @@ document.getElementById("recognizeBtn").onclick = async () => {
 function computeAiDraft(data){
   const draft = { area_sqm: data.area_sqm ?? null, shadowProfileLen: null, standardProfileLen: null, electroCorniceLen: null };
 
+  // Самый прямой источник: сводная таблица "материал потолка — площадь" (любое название)
+  if (Array.isArray(data.ceiling_material_areas) && data.ceiling_material_areas.length){
+    const isStretchMaterial = m => /натяжн|полотн|пвх/i.test(m || "");
+    let total = 0, any = false;
+    data.ceiling_material_areas.forEach(m => {
+      if (typeof m.area_sqm === "number" && isStretchMaterial(m.material)) { total += m.area_sqm; any = true; }
+    });
+    if (any) draft.area_sqm = Math.round(total * 100) / 100;
+  }
+
   if (Array.isArray(data.ceiling_profiles) && data.ceiling_profiles.length){
     let shadow = 0, standard = 0, any = false;
     data.ceiling_profiles.forEach(p => {
@@ -659,10 +669,10 @@ function computeAiDraft(data){
   }
 
   const breakdown = computeCeilingBreakdown(data);
-  if (breakdown.totals.stretch !== null) {
-    // Площадь по зонам плана — самый точный источник, если он есть
+  if (draft.area_sqm === null && breakdown.totals.stretch !== null) {
+    // Площадь по зонам плана — используем, только если сводной таблицы не было
     draft.area_sqm = breakdown.totals.stretch;
-  } else if (Array.isArray(data.rooms) && data.rooms.length) {
+  } else if (draft.area_sqm === null && Array.isArray(data.rooms) && data.rooms.length) {
     // Резерв: если в самой таблице помещений явно написано, что это площадь потолка/полотна
     // (а не площадь пола) — берём сумму оттуда
     const isCeilingKind = k => /потолок|потолк|полотн|натяжн/i.test(k || "");
@@ -752,6 +762,14 @@ function renderAiResult(data){
   const out = document.getElementById("aiOutput");
   const breakdown = computeCeilingBreakdown(data);
   let html = `<div class="ai-result"><h3>Черновые данные с чертежа</h3>`;
+
+  if (Array.isArray(data.ceiling_material_areas) && data.ceiling_material_areas.length){
+    html += `<div class="row" style="margin-top:8px;"><strong>Площадь по типам отделки потолка (сводная таблица):</strong></div>`;
+    html += `<table><tr><th>Материал</th><th>Площадь</th></tr>`;
+    data.ceiling_material_areas.forEach(m => { html += `<tr><td>${escapeHtml(m.material)}</td><td>${m.area_sqm} м²</td></tr>`; });
+    html += `</table>`;
+    html += `<div class="src">Строка с «натяжной/полотно/ПВХ» подставится в «Полотно» при клике в справочнике.</div>`;
+  }
 
   if (breakdown.totals.stretch !== null) {
     html += `<div class="row"><strong>Площадь натяжного потолка (по зонам на плане):</strong> ${breakdown.totals.stretch} м²</div>`;
