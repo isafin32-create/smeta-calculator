@@ -312,6 +312,21 @@ function guessQty(item){
   return { qty: null, estimated: false };
 }
 
+// После распознавания заполняет пустые количества в строках, добавленных ДО распознавания
+function fillEmptyRows(){
+  let changed = false;
+  rows.forEach(r => {
+    if (r.qty != null && r.qty !== "") return;
+    const { qty, estimated } = guessQty({name: r.name || ""});
+    if (qty == null) return;
+    r.qty = qty;
+    r.aiGuessed = !estimated;
+    r.aiEstimated = estimated;
+    changed = true;
+  });
+  if (changed) renderSmeta();
+}
+
 function addRow(item){
   const { qty, estimated } = guessQty(item);
   rows.push({name:item.name, unit:item.unit, qty, price:item.price || 0, aiGuessed: qty !== null && !estimated, aiEstimated: estimated && qty !== null});
@@ -854,6 +869,7 @@ document.getElementById("recognizeBtn").onclick = async () => {
     computeAiDraft(data);
     aiEstimates = (geometryMode && data.geometry_estimates) ? data.geometry_estimates : null;
     if (aiEstimates) renderGeometryEstimates(aiEstimates);
+    fillEmptyRows();
   } catch (e){
     out.innerHTML = `<div class="ai-error">Не удалось связаться с сервером: ${escapeHtml(e.message)}</div>`;
   } finally {
