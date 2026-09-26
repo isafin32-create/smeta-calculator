@@ -544,12 +544,10 @@ async function handleFiles(fileList){
     }
   }
 
-  // Если по тексту не нашли ни плана потолка, ни развёрток — просим ИИ определить листы по картинкам
+  // Определение по одному тексту ошибается (на планах тоже встречается слово «развёртка»),
+  // поэтому листы всегда определяет ИИ — по картинке и по надписям с листа. Текст — только запасной вариант.
   const pdfPages = pages.filter(p => p.src === "pdf");
-  const foundKey = pdfPages.some(p => p.category === "ceiling" || p.category === "elevations");
-  if (pdfPages.length && !foundKey){
-    await classifyWithAi(pdfPages.filter(p => p.category !== "index"));
-  }
+  if (pdfPages.length) await classifyWithAi(pdfPages);
 
   autoSelect();
   activePage = Math.max(0, pages.findIndex(p => p.selected));
@@ -592,11 +590,23 @@ async function addPdfPages(file){
   for (let i = 1; i <= pdf.numPages; i++){
     setStatus(`Читаю проект: лист ${i} из ${pdf.numPages}…`);
     const p = {src:"pdf", pdf, pageNum:i, category:"unknown", selected:false};
-    p.thumbUrl = await renderPdfPage(p, 0.3, "image/jpeg", 0.7);
+    p.thumbUrl = await renderPdfPage(p, fitScale(await pageSize(p), 240, 6e4), "image/jpeg", 0.7);
     try {
       const page = await pdf.getPage(i);
       const tc = await page.getTextContent();
-      p.category = classifyByText(tc.items.map(it => it.str).join(" ")) || "unknown";
+      const strs = tc.items.map(it => (it.str || "").trim()).filter(Boolean);
+      p.category = p.textCategory = classifyByText(strs.join(" ")) || "unknown";
+      // Короткие строки с названиями листов/таблиц — подсказка для ИИ
+      const KEY = /план|разв[её]рт|спецификац|ведомост|схем|потол|освещ|светил|мебел|стен|электр|сантех|обмер|перегород|розет|выключ|плитк|двер|карниз|титул|содержан/i;
+      const seen = new Set(), hint = [];
+      for (const s of strs){
+        if (s.length < 4 || s.length > 70 || !KEY.test(s)) continue;
+        const k = s.toLowerCase();
+        if (seen.has(k)) continue;
+        seen.add(k); hint.push(s);
+        if (hint.join(" | ").length > 500) break;
+      }
+      p.hint = hint.join(" | ");
     } catch(e){ p.category = "unknown"; }
     pages.push(p);
   }
@@ -619,25 +629,44 @@ function classifyByText(text){
 async function classifyWithAi(list){
   if (!list.length) return;
   const serverUrl = localStorage.getItem(LS_SERVER) || DEFAULT_SERVER_URL;
-  const CHUNK = 16;
-  for (let s = 0; s < list.length; s += CHUNK){
-    const chunk = list.slice(s, s + CHUNK);
-    setStatus(`Определяю, какие листы нужны (ИИ смотрит листы ${s+1}–${s+chunk.length} из ${list.length})…`);
+  const CHUNK = 12;
+  const chunks = [];
+  for (let s = 0; s < list.length; s += CHUNK) chunks.push(list.slice(s, s + CHUNK));
+  let done = 0;
+  setStatus(`Определяю, какие листы нужны для расчёта… 0 из ${chunks.length}`);
+  await runLimited(chunks.map(chunk => async () => {
     try {
-      const images = [];
+      const images = [], texts = [];
       for (const p of chunk){
-        const url = await renderPdfPage(p, 0.9, "image/jpeg", 0.6);
+        const url = await renderPdfPage(p, fitScale(await pageSize(p), 1400, 1.2e6), "image/jpeg", 0.7);
         images.push({mediaType:"image/jpeg", data:url.split(",")[1]});
+        texts.push(p.hint || "");
       }
       const resp = await fetch(serverUrl, {method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({mode:"classify", images})});
+        body: JSON.stringify({mode:"classify", images, texts})});
       const data = await resp.json();
       (data.pages || []).forEach(r => {
         const p = chunk[(r.n || 0) - 1];
-        if (p && CATS[r.category]) p.category = r.category;
+        if (p && CATS[r.category]){ p.category = r.category; p.aiTitle = r.title || ""; }
       });
-    } catch(e){ /* не получилось — оставим как есть, пользователь выберет вручную */ }
-  }
+    } catch(e){ /* ИИ не ответил — для этих листов остаётся определение по тексту */ }
+    done++;
+    setStatus(`Определяю, какие листы нужны для расчёта… ${done} из ${chunks.length}`);
+  }), 3);
+}
+
+// Размер листа в точках PDF
+async function pageSize(p){
+  const page = await p.pdf.getPage(p.pageNum);
+  const v = page.getViewport({scale: 1});
+  return {w: v.width, h: v.height};
+}
+// Масштаб, чтобы картинка не превышала maxSide по длинной стороне и maxPixels по площади
+// (на телефонах слишком большой холст молча получается пустым)
+function fitScale(size, maxSide, maxPixels){
+  const byMax = maxSide / Math.max(size.w, size.h);
+  const byArea = Math.sqrt(maxPixels / (size.w * size.h));
+  return Math.min(2.2, byMax, byArea);
 }
 
 function autoSelect(){
@@ -688,7 +717,7 @@ function renderThumbs(){
   pages.forEach((p, idx) => {
     const div = document.createElement("div");
     div.className = "thumb" + (p.selected ? " sel" : "") + (idx === activePage ? " active" : "");
-    div.title = "Лист " + (idx+1);
+    div.title = "Лист " + (idx+1) + (p.aiTitle ? " — " + p.aiTitle : "");
     const img = document.createElement("img");
     img.src = p.thumbUrl;
     div.appendChild(img);
@@ -712,7 +741,7 @@ async function renderPreview(){
   let url = p.src === "image" ? p.dataUrl : p.preview;
   if (!url){
     el.innerHTML = `<div style="padding:20px;color:var(--muted);font-size:13px;">Загружаю лист…</div>`;
-    url = p.preview = await renderPdfPage(p, 1.4, "image/jpeg", 0.85);
+    url = p.preview = await renderPdfPage(p, fitScale(await pageSize(p), 2000, 3e6), "image/jpeg", 0.85);
     if (activePage !== idx) return;
     el.innerHTML = "";
   }
@@ -732,8 +761,8 @@ document.getElementById("serverBtn").onclick = () => {
 
 async function pageForAi(p){
   if (p.src === "image") return {mediaType: p.mediaType, data: p.base64};
-  const url = await renderPdfPage(p, 2.2, "image/png");
-  return {mediaType: "image/png", data: url.split(",")[1]};
+  const url = await renderPdfPage(p, fitScale(await pageSize(p), 3200, 7e6), "image/jpeg", 0.9);
+  return {mediaType: "image/jpeg", data: url.split(",")[1]};
 }
 
 // Запускает задачи не больше limit одновременно

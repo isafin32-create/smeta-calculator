@@ -103,7 +103,13 @@ const CLASSIFY_PROMPT = `Тебе присылают по порядку уме�
   полы, плитка, двери, тёплый пол, вентиляция и т.п.).
 Ответь СТРОГО одним JSON-объектом без пояснений и без markdown:
 {"pages":[{"n":1,"title":"название листа как напечатано","category":"..."}]}
-n — порядковый номер страницы в ЭТОМ запросе, начиная с 1. Ровно одна запись на каждую страницу.`;
+n — порядковый номер страницы в ЭТОМ запросе, начиная с 1. Ровно одна запись на каждую страницу.
+ВАЖНО: главное — НАЗВАНИЕ ЛИСТА (в штампе, обычно справа внизу, или крупный заголовок).
+На обычных планах квартиры (обмерный, перегородки, мебель, полы, электрика) часто стоят значки-указатели
+развёрток с подписью «Развёртка 1» и т.п. — такой лист НЕ "elevations", это "other".
+"elevations" — только если сам лист целиком состоит из развёрнутых стен (вид стены сбоку, рядами).
+"ceiling" — только если на листе нарисован именно потолок (зоны потолка, уровни, профили, подписи
+вида «Нат.пот … м²») или таблица про отделку/площади потолка.`;
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -137,7 +143,7 @@ export default {
       return json({ error: "Не переданы изображения чертежа" }, 400);
     }
     if (body.mode === "classify") {
-      return classifyPages(images, env);
+      return classifyPages(images, Array.isArray(body.texts) ? body.texts : [], env);
     }
     if (images.length > 12) {
       return json({ error: "Слишком много страниц за один раз (максимум 12)" }, 400);
@@ -208,14 +214,15 @@ async function callModel(env, system, content, maxTokens, thinking) {
 
 
 // Быстрое определение, какие листы проекта нужны для расчёта (по уменьшенным картинкам)
-async function classifyPages(images, env) {
+async function classifyPages(images, texts, env) {
   if (images.length > 20) {
     return json({ error: "Слишком много страниц для определения за раз (максимум 20)" }, 400);
   }
   const content = [];
   images.forEach((img, i) => {
     if (!img.data || !img.mediaType) return;
-    content.push({ type: "text", text: `Страница ${i + 1}:` });
+    const t = (texts[i] || "").slice(0, 600);
+    content.push({ type: "text", text: `Страница ${i + 1}.` + (t ? ` Надписи с этой страницы: ${t}` : " (текстовых надписей нет — смотри по картинке)") });
     content.push({ type: "image", source: { type: "base64", media_type: img.mediaType, data: img.data } });
   });
   content.push({ type: "text", text: "Определи категорию каждой страницы и верни только JSON." });
