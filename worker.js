@@ -169,7 +169,7 @@ export default {
     // и не дошла до JSON) — 2-я попытка без рассуждения.
     const attempts = [
       { max_tokens: geometryMode ? 48000 : 24000, thinking: { type: "enabled", budget_tokens: geometryMode ? 24000 : 8000 } },
-      { max_tokens: 16000, thinking: null },
+      { max_tokens: 16000, thinking: { type: "disabled" } },
     ];
     let lastRaw = "", lastStop = "";
     for (const a of attempts) {
@@ -239,6 +239,7 @@ async function classifyPages(images, texts, env) {
       body: JSON.stringify({
         model: DEEPSEEK_MODEL,
         max_tokens: 4000,
+        thinking: { type: "disabled" }, // у DeepSeek V4 рассуждение включено по умолчанию — здесь оно не нужно
         system: CLASSIFY_PROMPT,
         messages: [{ role: "user", content }],
       }),
