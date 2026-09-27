@@ -165,12 +165,12 @@ export default {
 
     const systemPrompt = SYSTEM_PROMPT + (geometryMode ? GEOMETRY_MODE_ADDENDUM : "");
 
-    // 1-я попытка — с рассуждением; если ответа нет (модель «выговорилась» в рассуждении
-    // и не дошла до JSON) — 2-я попытка без рассуждения.
-    const attempts = [
-      { max_tokens: geometryMode ? 48000 : 24000, thinking: { type: "enabled", budget_tokens: geometryMode ? 24000 : 8000 } },
-      { max_tokens: 16000, thinking: { type: "disabled" } },
-    ];
+    // Без рассуждения: чтение таблиц и подписей с чертежа ему не нужно, а с ним ответ идёт
+    // в разы дольше и часто обрывается пустым. Рассуждение — только в экспериментальном режиме.
+    const attempts = geometryMode
+      ? [{ max_tokens: 32000, thinking: { type: "enabled", budget_tokens: 16000 } },
+         { max_tokens: 12000, thinking: { type: "disabled" } }]
+      : [{ max_tokens: 12000, thinking: { type: "disabled" } }];
     let lastRaw = "", lastStop = "";
     for (const a of attempts) {
       const r = await callModel(env, systemPrompt, content, a.max_tokens, a.thinking);
