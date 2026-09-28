@@ -286,7 +286,16 @@ let aiEstimates = null; // непроверенные геометрически
 function guessQty(item){
   if (!aiDraft) return { qty: null, estimated: false };
   const name = item.name;
-  if (name.includes("Полотно")) return { qty: aiDraft.area_sqm ?? null, estimated: false };
+  if (name.includes("Полотно")) return { qty: aiDraft.area_sqm ?? null, estimated: !!aiDraft.areaEstimated };
+  if (name === "Монтаж встроенной трековой системы" && sumLen(aiEstimates?.track_lines) != null) {
+    return { qty: sumLen(aiEstimates.track_lines), estimated: true };
+  }
+  if (name === "Монтаж парящего профиля со вставкой, натяжка полотна в парящий профиль" && sumLen(aiEstimates?.backlight_lines) != null) {
+    return { qty: sumLen(aiEstimates.backlight_lines), estimated: true };
+  }
+  if (name === "Монтаж бруса под шкаф" && sumLen(aiEstimates?.wardrobe_niches) != null) {
+    return { qty: sumLen(aiEstimates.wardrobe_niches), estimated: true };
+  }
   if (name === "Монтаж теневого профиля Еврокраб, натяжка полотна в теневой профиль") {
     if (aiDraft.shadowProfileLen != null) return { qty: aiDraft.shadowProfileLen, estimated: false };
     if (aiEstimates?.perimeter_estimate_m != null) return { qty: aiEstimates.perimeter_estimate_m, estimated: true };
@@ -299,8 +308,9 @@ function guessQty(item){
   if (name === "Запил, стык, обработка углов профиля" && aiEstimates?.corner_count_estimate != null) {
     return { qty: aiEstimates.corner_count_estimate, estimated: true };
   }
-  if (name === "Монтаж световых линий" && aiEstimates?.linear_light_length_estimate_m != null) {
-    return { qty: aiEstimates.linear_light_length_estimate_m, estimated: true };
+  if (name === "Монтаж световых линий") {
+    const v = sumLen(aiEstimates?.light_lines) ?? aiEstimates?.linear_light_length_estimate_m;
+    if (v != null) return { qty: v, estimated: true };
   }
   if (name === "Монтаж углов световых линий" && aiEstimates?.linear_light_corners_estimate != null) {
     return { qty: aiEstimates.linear_light_corners_estimate, estimated: true };
@@ -954,6 +964,7 @@ function mergeResults(list){
     rooms: r => `${(r.name||"").toLowerCase()}|${r.area_sqm}`,
     ceiling_zones: z => `${z.room_number}|${(z.material||"").toLowerCase()}|${z.area_sqm}`,
     wall_elevation_perimeters: w => `${(w.room||"").toLowerCase()}|${w.perimeter_m}`,
+    ceiling_notes: n => (n.text||"").toLowerCase(),
   };
   Object.keys(arrays).forEach(k => {
     const seen = new Set();
@@ -982,6 +993,9 @@ function mergeResults(list){
      "builtin_fixture_count_estimate","pendant_fixture_count_estimate"].forEach(k => {
       const e = ests.find(x => x[k] != null);
       g[k] = e ? e[k] : null;
+    });
+    ["perimeter_by_zone","backlight_lines","track_lines","light_lines","wardrobe_niches"].forEach(k => {
+      g[k] = ests.flatMap(x => Array.isArray(x[k]) ? x[k] : []);
     });
     g.confidence_note = [...new Set(ests.map(x => x.confidence_note).filter(Boolean))].join(" ");
     m.geometry_estimates = g;
@@ -1036,9 +1050,13 @@ function computeAiDraft(data){
   }
 
   const breakdown = computeCeilingBreakdown(data);
-  if (draft.area_sqm === null && breakdown.totals.stretch !== null) {
+  if (draft.area_sqm === null && breakdown.totals.stretch) {
     // Площадь по зонам плана — используем, только если сводной таблицы не было
     draft.area_sqm = breakdown.totals.stretch;
+  } else if (draft.area_sqm === null && breakdown.totals.other) {
+    // Зоны с площадями есть, но материал у них не подписан — подставим, но оранжевым «проверь»
+    draft.area_sqm = breakdown.totals.other;
+    draft.areaEstimated = true;
   } else if (draft.area_sqm === null && Array.isArray(data.rooms) && data.rooms.length) {
     // Резерв: если в самой таблице помещений явно написано, что это площадь потолка/полотна
     // (а не площадь пола) — берём сумму оттуда
@@ -1052,6 +1070,13 @@ function computeAiDraft(data){
   aiDraft = draft;
   toast("Готово — при клике по справочнику подставятся числа с чертежа (отмечены зелёным)");
 }
+
+const r2 = n => (typeof n === "number" ? Math.round(n * 100) / 100 : n);
+const sumLen = arr => {
+  if (!Array.isArray(arr) || !arr.length) return null;
+  const s = arr.reduce((t, x) => t + (typeof x.length_m === "number" ? x.length_m : 0), 0);
+  return s ? r2(s) : null;
+};
 
 // Группирует подписанные на плане зоны потолка по номеру помещения и типу материала.
 function computeCeilingBreakdown(data){
@@ -1078,9 +1103,9 @@ function computeCeilingBreakdown(data){
     return {
       room_number: key,
       name: room ? room.name : (key === "—" ? "без номера" : `Помещение №${key}`),
-      stretch: byRoom[key].stretch || null,
-      gkl: byRoom[key].gkl || null,
-      other: byRoom[key].other || null,
+      stretch: r2(byRoom[key].stretch) || null,
+      gkl: r2(byRoom[key].gkl) || null,
+      other: r2(byRoom[key].other) || null,
     };
   });
 
@@ -1102,7 +1127,10 @@ function renderGeometryEstimates(est){
   const rows = [
     ["Периметр теневого профиля", est.perimeter_estimate_m, "м"],
     ["Кол-во углов/резов профиля", est.corner_count_estimate, "шт"],
-    ["Длина световых линий", est.linear_light_length_estimate_m, "м"],
+    ["Подсветка потолка (парящий профиль)", sumLen(est.backlight_lines), "м"],
+    ["Треки", sumLen(est.track_lines), "м"],
+    ["Длина световых линий", sumLen(est.light_lines) ?? est.linear_light_length_estimate_m, "м"],
+    ["Ниши под шкаф (брус)", sumLen(est.wardrobe_niches), "м"],
     ["Углы световых линий", est.linear_light_corners_estimate, "шт"],
     ["Встраиваемые светильники (закладные)", est.builtin_fixture_count_estimate, "шт"],
     ["Люстры/подвесные (закладные)", est.pendant_fixture_count_estimate, "шт"],
@@ -1119,10 +1147,32 @@ function renderGeometryEstimates(est){
   } else {
     html += `<div style="margin-top:8px;">Даже приблизительно посчитать не смог — впиши эти цифры вручную.</div>`;
   }
+  const lists = [
+    ["Периметр по зонам", (est.perimeter_by_zone || []).map(z => ({where: z.zone, length_m: z.perimeter_m, basis: z.basis}))],
+    ["Подсветка потолка", est.backlight_lines],
+    ["Треки", est.track_lines],
+    ["Световые линии", est.light_lines],
+    ["Ниши под шкаф", est.wardrobe_niches],
+  ];
+  lists.forEach(([title, arr]) => {
+    if (!Array.isArray(arr) || !arr.length) return;
+    html += `<div style="margin-top:10px;"><strong>${escapeHtml(title)} — откуда цифры:</strong></div><table>`;
+    arr.forEach(x => { html += `<tr><td>${escapeHtml(x.where || "")}</td><td>${r2(x.length_m)} м</td><td class="src">${escapeHtml(x.basis || "")}</td></tr>`; });
+    html += `</table>`;
+  });
   if (est.confidence_note) html += `<div style="margin-top:8px;font-style:italic;">${escapeHtml(est.confidence_note)}</div>`;
 
   html += `</div>`;
   out.innerHTML += html;
+}
+
+function zonesTable(data){
+  const zones = (Array.isArray(data.ceiling_zones) ? data.ceiling_zones : []).filter(z => typeof z.area_sqm === "number");
+  if (!zones.length) return "";
+  let t = `<div class="row" style="margin-top:8px;"><strong>Зоны на плане (${zones.length}):</strong></div>`;
+  t += `<table><tr><th>№</th><th>Материал</th><th>Площадь</th></tr>`;
+  zones.forEach(z => { t += `<tr><td>${z.room_number ?? "—"}</td><td>${escapeHtml(z.material || "не указано")}</td><td>${r2(z.area_sqm)} м²</td></tr>`; });
+  return t + `</table>`;
 }
 
 function renderAiResult(data){
@@ -1144,21 +1194,18 @@ function renderAiResult(data){
     html += `<div class="src">Строка с «натяжной/полотно/ПВХ» подставится в «Полотно» при клике в справочнике.</div>`;
   }
 
-  if (breakdown.totals.stretch !== null) {
+  if (breakdown.totals.stretch) {
     html += `<div class="row"><strong>Площадь натяжного потолка (по зонам на плане):</strong> ${breakdown.totals.stretch} м²</div>`;
     if (data.area_sqm && Math.abs(data.area_sqm - breakdown.totals.stretch) > 0.5) {
       html += `<div class="note">⚠ Сводная ведомость даёт другую цифру: ${data.area_sqm} м² (${escapeHtml(data.area_source || "")}). Числа разошлись — сверь оба источника на чертеже перед отправкой клиенту.</div>`;
     }
     if (breakdown.totals.gkl) html += `<div class="row src">Площадь ГКЛ-потолков (не натяжных): ${breakdown.totals.gkl} м²</div>`;
 
-    if (breakdown.byRoomRows.length){
-      html += `<div class="row" style="margin-top:8px;"><strong>По помещениям:</strong></div>`;
-      html += `<table><tr><th>Помещение</th><th>Натяжной</th><th>ГКЛ</th></tr>`;
-      breakdown.byRoomRows.forEach(r => {
-        html += `<tr><td>${escapeHtml(r.name)}</td><td>${r.stretch ?? "—"}${r.stretch ? " м²" : ""}</td><td>${r.gkl ?? "—"}${r.gkl ? " м²" : ""}</td></tr>`;
-      });
-      html += `</table>`;
-    }
+    html += zonesTable(data);
+  } else if (breakdown.totals.other) {
+    html += `<div class="row"><strong>Площадь зон на плане потолка:</strong> ${breakdown.totals.other} м²</div>`;
+    html += `<div class="note">⚠ У зон подписаны только площади, материал не указан. Если все они — натяжной потолок, это и есть площадь полотна (подставится оранжевым «проверь»). Если какая-то зона — ГКЛ или без потолка, либо маленькая зона нарисована внутри большой (уровень), и её площадь уже входит в большую, поправь количество вручную.</div>`;
+    html += zonesTable(data);
   } else {
     const floorOnly = data.area_sqm != null && data.area_source !== "ведомость"
       && !(Array.isArray(data.ceiling_material_areas) && data.ceiling_material_areas.length)
@@ -1173,6 +1220,15 @@ function renderAiResult(data){
     }
   }
   if (data.area_note) html += `<div class="note">⚠ ${escapeHtml(data.area_note)}</div>`;
+  if (Array.isArray(data.ceiling_notes) && data.ceiling_notes.length){
+    html += `<div class="row" style="margin-top:8px;"><strong>Пометки на плане потолка:</strong></div><table>`;
+    data.ceiling_notes.forEach(n => { html += `<tr><td>${escapeHtml(n.text || "")}</td><td>${n.count ? n.count + " шт" : ""}</td></tr>`; });
+    html += `</table>`;
+    if (!document.getElementById("geometryModeCheckbox").checked &&
+        data.ceiling_notes.some(n => /подсвет|трек|светов|ниш/i.test(n.text || ""))){
+      html += `<div class="src">Длины подсветки, треков и ниш можно оценить по размерам — включи «Экспериментально» и нажми «Считать» ещё раз.</div>`;
+    }
+  }
 
   html += `<div class="row"><strong>Периметр:</strong> ${data.perimeter_m ?? "не найдено"} ${data.perimeter_m ? "м" : ""}`;
   if (data.perimeter_source) html += ` <span class="src">(${escapeHtml(data.perimeter_source)})</span>`;
