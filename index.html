@@ -2,1620 +2,454 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Предварительный расчёт по дизайн-проекту</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Трекер деклараций команды</title>
 <style>
-  :root{
-    --bg:#faf8f3; --panel:#fff; --border:#e4ddd0; --accent:#2c6e8f;
-    --accent-dark:#1f5470; --text:#2b2b2b; --muted:#7a746a; --danger:#c0392b;
-    --danger-bg:#fbeceb; --highlight:#fff7e0;
+  :root {
+    --bg: #f6f5f2; --card-bg: #ffffff; --text: #1c1b19; --text-dim: #6b6862;
+    --border: #e6e3dc; --accent: #b5581f; --accent-soft: #f1ddc9; --track: #eceae5; --good: #3e7d4a;
   }
-  *{box-sizing:border-box;}
-  body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);margin:0;padding:24px;}
-  h1{font-size:24px;margin:0 0 4px;}
-  .subtitle{color:var(--muted);margin:0 0 20px;font-size:14px;}
-  .layout{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;}
-  @media(max-width:900px){.layout{grid-template-columns:minmax(0,1fr);}}
-  .layout > *{min-width:0;}
-  .panel{overflow-x:auto;}
-  .panel{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:18px;}
-  .panel h2{margin:0 0 12px;font-size:16px;}
-  .dropzone{border:2px dashed var(--border);border-radius:8px;padding:28px 12px;text-align:center;cursor:pointer;color:var(--muted);}
-  .dropzone.drag{background:var(--highlight);border-color:var(--accent);}
-  .dropzone strong{display:block;color:var(--text);font-size:15px;margin-bottom:4px;}
-  .thumbs{display:flex;gap:8px;margin:12px 0;flex-wrap:wrap;max-height:300px;overflow-y:auto;}
-  .thumb{position:relative;width:78px;height:104px;border:2px solid var(--border);border-radius:4px;overflow:hidden;cursor:pointer;background:#f2f0ea;opacity:.55;}
-  .thumb img{width:100%;height:100%;object-fit:cover;}
-  .thumb.sel{border-color:#2c8a4e;opacity:1;}
-  .thumb.active{outline:3px solid var(--accent);outline-offset:-1px;opacity:1;}
-  .thumb .pg{position:absolute;top:2px;left:3px;background:rgba(255,255,255,.9);font-size:10px;padding:0 3px;border-radius:3px;}
-  .thumb input{position:absolute;top:2px;right:2px;margin:0;width:16px;height:16px;cursor:pointer;}
-  .thumb .cat{position:absolute;left:0;right:0;bottom:0;background:rgba(43,43,43,.78);color:#fff;font-size:9.5px;line-height:1.25;padding:2px 3px;text-align:center;}
-  .thumb.sel .cat{background:rgba(44,138,78,.92);}
-  .sel-summary{font-size:12.5px;color:var(--muted);line-height:1.5;margin-bottom:10px;}
-  .sel-summary strong{color:var(--text);}
-  .preview{border:1px solid var(--border);border-radius:6px;overflow:auto;max-height:520px;text-align:center;background:#f2f0ea;}
-  .preview img{max-width:100%;display:block;margin:0 auto;}
-  .preview .stage{position:relative;margin:0 auto;}
-  .preview .stage img{width:100%;max-width:none;}
-  .preview .stage svg{position:absolute;left:0;top:0;width:100%;height:100%;}
-  .preview.mt-active .stage svg{cursor:crosshair;}
-  .mtool{margin:10px 0 8px;}
-  .mtool-bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
-  .mtool-bar button{background:#fff;border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:13px;}
-  .mtool-bar button.on{background:var(--accent);color:#fff;border-color:var(--accent);}
-  .mtool-bar .zoom{margin-left:auto;display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);}
-  .mtool-bar .zoom button{padding:5px 11px;font-size:15px;}
-  .mtool-hint{font-size:12.5px;color:var(--muted);margin-top:7px;line-height:1.45;}
-  .mtool-hint button{background:#fff;border:1px solid var(--border);border-radius:5px;padding:4px 8px;font-size:12px;margin:4px 6px 0 0;}
-  .layers{margin:10px 0 4px;}
-  .layer{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:7px 8px;border:1px solid var(--border);border-radius:6px;margin-bottom:6px;font-size:13px;background:#fff;}
-  .layer.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset;}
-  .layer .sw{width:12px;height:12px;border-radius:50%;flex:none;}
-  .layer .nm{cursor:pointer;font-weight:600;}
-  .layer .tot{margin-left:auto;font-weight:600;}
-  .layer select{font-size:12px;max-width:200px;}
-  .layer button{background:none;border:1px solid var(--border);border-radius:5px;padding:3px 7px;font-size:12px;}
-  .layers-add button{background:#fff;border:1px dashed var(--border);border-radius:6px;padding:6px 10px;font-size:12.5px;margin-right:6px;}
-  .ai-row{display:flex;align-items:center;gap:14px;margin-top:14px;flex-wrap:wrap;}
-  button{font-family:inherit;cursor:pointer;}
-  .btn-primary{background:var(--accent);color:#fff;border:none;border-radius:6px;padding:10px 16px;font-size:14px;}
-  .btn-primary:hover{background:var(--accent-dark);}
-  .btn-primary:disabled{background:#a9c2cc;cursor:default;}
-  .link-btn{background:none;border:none;color:var(--muted);text-decoration:underline;font-size:13px;padding:0;}
-  .ai-error{margin-top:14px;background:var(--danger-bg);color:var(--danger);border:1px solid #eecdc9;border-radius:8px;padding:14px;font-size:13px;line-height:1.5;word-break:break-word;}
-  .ai-result{margin-top:14px;background:#eef6f0;border:1px solid #cfe6d5;border-radius:8px;padding:14px;font-size:13px;line-height:1.6;}
-  .ai-result h3{margin:0 0 8px;font-size:14px;}
-  .ai-result .row{margin-bottom:4px;}
-  .ai-result .src{color:var(--muted);font-size:12px;}
-  .ai-result .note{color:#a06a1a;background:#fdf3de;border-radius:4px;padding:6px 8px;margin-top:4px;}
-  .ai-result table{width:100%;border-collapse:collapse;margin-top:6px;}
-  .ai-result td,.ai-result th{border-bottom:1px solid #d6e8da;padding:4px 6px;text-align:left;font-size:12px;}
-  .top-row{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;}
-  .top-row input{min-width:0;flex:1 1 180px;}
-  .top-row input{flex:1;border:1px solid var(--border);border-radius:6px;padding:9px 12px;font-size:14px;}
-  .ref-list{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
-  .ref-item{display:flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--border);border-radius:20px;padding:8px 14px;font-size:13px;}
-  .ref-item button{background:none;border:none;color:var(--muted);font-size:13px;padding:0 2px;}
-  .ref-item button:hover{color:var(--text);}
-  .ref-item .rm:hover{color:var(--danger);}
-  .new-pos{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;}
-  .new-pos input[type=text]{flex:2;min-width:160px;border:1px solid var(--border);border-radius:6px;padding:9px 12px;font-size:14px;}
-  .new-pos select,.new-pos input[type=number]{border:1px solid var(--border);border-radius:6px;padding:9px 10px;font-size:14px;}
-  .new-pos input[type=number]{width:100px;}
-  table.smeta{width:100%;border-collapse:collapse;margin-top:4px;}
-  table.smeta th{text-align:left;font-size:13px;color:var(--muted);font-weight:600;padding:8px 6px;border-bottom:1px solid var(--border);}
-  table.smeta td{padding:8px 6px;border-bottom:1px solid var(--border);font-size:14px;vertical-align:middle;}
-  table.smeta input.qty{width:80px;border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:14px;}
-  table.smeta input.qty.empty{border-color:var(--danger);background:var(--danger-bg);}
-  table.smeta input.qty.ai-guessed{border-color:#2c8a4e;background:#eef6f0;}
-  table.smeta input.qty.ai-estimated{border-color:#c07a1a;background:#fdf3e3;}
-  .estimate-box{margin-top:14px;background:#fdf3e3;border:1px solid #ecd3a0;border-radius:8px;padding:14px;font-size:13px;line-height:1.6;}
-  .estimate-box h3{margin:0 0 8px;font-size:14px;color:#8a5a10;}
-  table.smeta input.price{width:90px;border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:14px;}
-  table.smeta .rm{background:none;border:none;color:var(--muted);font-size:16px;}
-  table.smeta .rm:hover{color:var(--danger);}
-  .empty-hint{color:var(--muted);font-size:14px;padding:14px 0;}
-  .totals{display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:14px;border-top:1px solid var(--border);}
-  .totals .left{font-size:14px;color:var(--muted);}
-  .totals .left .warn{color:var(--danger);font-weight:600;}
-  .totals .sum{font-size:26px;font-weight:700;}
-  .actions{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;}
-  .btn-secondary{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px 16px;font-size:14px;}
-  .btn-secondary:hover{background:#f0ece1;}
-  .toast{position:fixed;bottom:20px;right:20px;background:#2b2b2b;color:#fff;padding:10px 16px;border-radius:6px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;}
-  .toast.show{opacity:1;}
-  @media print{
-    body *{visibility:hidden;}
-    .print-area,.print-area *{visibility:visible;}
-    .print-area{position:absolute;left:0;top:0;width:100%;}
-    .actions,.new-pos,.ref-list,.top-row button,input.qty,input.price,.rm{display:none !important;}
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#171614; --card-bg:#211f1c; --text:#f0eee8; --text-dim:#a5a199; --border:#34322c; --accent:#e08a45; --accent-soft:#3a2c1c; --track:#2c2a25; --good:#6bbd7a; }
   }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif; }
+  .wrap { max-width:980px; margin:0 auto; padding:28px 18px 60px; }
+  h1 { font-size:1.4rem; margin:0 0 4px; }
+  .sub { color:var(--text-dim); font-size:0.9rem; margin:0 0 22px; }
+
+  .team-card { background:var(--card-bg); border:1px solid var(--border); border-radius:16px; padding:20px; margin-bottom:26px; }
+  .team-top { display:flex; align-items:baseline; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+  .team-top .pct { font-size:2rem; font-weight:700; color:var(--accent); }
+  .team-top .lbl { font-size:0.85rem; color:var(--text-dim); }
+  .bar { height:10px; border-radius:6px; background:var(--track); overflow:hidden; margin-top:10px; }
+  .bar > div { height:100%; background:var(--accent); border-radius:6px; }
+  .team-meta { margin-top:8px; font-size:0.82rem; color:var(--text-dim); }
+
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:14px; }
+  .card { background:var(--card-bg); border:1px solid var(--border); border-radius:14px; padding:16px; display:flex; flex-direction:column; gap:10px; }
+  .card.me { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent); }
+  .card-head { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .name-static { font-weight:600; font-size:1rem; }
+  .you-tag { font-size:0.68rem; background:var(--accent-soft); color:var(--accent); padding:2px 7px; border-radius:20px; font-weight:600; }
+  .card-pct { font-size:0.85rem; color:var(--text-dim); }
+  .card-pct b { color:var(--text); }
+
+  .tasks { display:flex; flex-direction:column; gap:8px; }
+  .task { display:flex; align-items:flex-start; gap:8px; font-size:0.88rem; }
+  .task input[type=checkbox] { margin-top:3px; accent-color:var(--accent); width:16px; height:16px; flex:none; }
+  .task .txt { flex:1; word-break:break-word; line-height:1.35; }
+  .task.done .txt { text-decoration:line-through; color:var(--text-dim); }
+  .task .del { border:none; background:none; color:var(--text-dim); cursor:pointer; font-size:0.95rem; flex:none; }
+  .stepper { display:flex; align-items:center; gap:6px; flex:none; }
+  .stepper button {
+    width:22px; height:22px; border-radius:6px; border:1px solid var(--border); background:var(--bg);
+    color:var(--text); cursor:pointer; font-size:0.85rem; line-height:1; padding:0;
+  }
+  .stepper .count { font-size:0.8rem; color:var(--text-dim); min-width:40px; text-align:center; }
+  .empty-hint { font-size:0.82rem; color:var(--text-dim); font-style:italic; }
+
+  .add-row { display:flex; gap:6px; margin-top:4px; }
+  .add-row input { flex:1; padding:7px 9px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:0.86rem; }
+  .add-row button { border:none; background:var(--accent); color:#fff; border-radius:8px; padding:0 13px; font-size:0.9rem; cursor:pointer; font-weight:600; }
+
+  .paste-toggle {
+    border:none; background:none; color:var(--accent); font-size:0.8rem; cursor:pointer; padding:2px 0;
+    text-align:left; text-decoration:underline; width:fit-content;
+  }
+  .paste-box { display:none; flex-direction:column; gap:8px; }
+  .paste-box.open { display:flex; }
+  .paste-box textarea {
+    width:100%; min-height:130px; padding:9px 10px; border-radius:8px; border:1px solid var(--border);
+    background:var(--bg); color:var(--text); font-size:0.82rem; font-family:inherit; resize:vertical;
+  }
+  .paste-box .row { display:flex; gap:8px; }
+  .paste-box button { border:none; border-radius:8px; padding:8px 12px; font-size:0.85rem; cursor:pointer; font-weight:600; }
+  .paste-box .parse-btn { background:var(--accent); color:#fff; }
+  .paste-box .cancel-btn { background:var(--track); color:var(--text); }
+  .paste-hint { font-size:0.78rem; color:var(--text-dim); }
+
+  .status { text-align:center; color:var(--text-dim); font-size:0.85rem; padding:30px 0; }
+
+  .modal-bg { position:fixed; inset:0; background:rgba(0,0,0,0.4); display:flex; align-items:center; justify-content:center; padding:20px; z-index:10; overflow-y:auto; }
+  .modal { background:var(--card-bg); border-radius:14px; padding:22px; max-width:420px; width:100%; margin:auto; }
+  .modal h2 { margin:0 0 10px; font-size:1.1rem; }
+  .modal p { color:var(--text-dim); font-size:0.85rem; margin:0 0 14px; }
+  .modal input { width:100%; padding:9px 10px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:0.95rem; margin-bottom:12px; }
+  .modal textarea { width:100%; min-height:160px; padding:9px 10px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:0.85rem; font-family:inherit; margin-bottom:10px; resize:vertical; }
+  .modal button { width:100%; border:none; background:var(--accent); color:#fff; border-radius:8px; padding:10px; font-size:0.95rem; cursor:pointer; font-weight:600; }
+  .modal .skip { background:none; color:var(--text-dim); margin-top:8px; text-decoration:underline; }
+  .modal .step2 { display:none; }
 </style>
 </head>
 <body>
+<div class="wrap">
+  <h1>📋 Трекер деклараций команды</h1>
+  <p class="sub">Каждый ведёт свою декларацию — можно вставить её текстом целиком, дальше процент считается сам.</p>
 
-<h1>Предварительный расчёт по дизайн-проекту</h1>
-<p class="subtitle">Чертёж слева, смета справа — считает суммы сам, ты вводишь только цифры с чертежа (или подтверждаешь то, что нашёл ИИ)</p>
-
-<div class="layout">
-
-  <!-- ЛЕВАЯ ПАНЕЛЬ: ЧЕРТЁЖ -->
-  <div class="panel">
-    <div style="display:flex;justify-content:space-between;align-items:baseline;">
-      <h2>Дизайн-проект</h2>
-      <span id="fileNameLabel" style="color:var(--muted);font-size:12px;"></span>
+  <div class="team-card" id="teamCard" style="display:none">
+    <div class="team-top">
+      <div><div class="pct" id="teamPct">0%</div><div class="lbl">общий процент команды</div></div>
+      <div class="lbl" id="teamCount" style="text-align:right"></div>
     </div>
-
-    <div class="dropzone" id="dropzone">
-      <strong>Загрузить чертёж</strong>
-      Весь PDF проекта целиком — программа сама найдёт план потолка и развёртки
-      <input type="file" id="fileInput" accept="application/pdf,image/*" multiple style="display:none;">
-    </div>
-
-    <div class="thumbs" id="thumbs"></div>
-    <div class="sel-summary" id="selSummary"></div>
-    <div class="mtool" id="mtool" hidden>
-      <div class="mtool-bar">
-        <button data-mode="view" class="on">✋ Смотреть</button>
-        <button data-mode="count">🔢 Считать значки</button>
-        <button data-mode="length">📏 Длина</button>
-        <button data-mode="scale">📐 Масштаб</button>
-        <span class="zoom"><button id="zoomOut" title="Уменьшить">−</button><span id="zoomVal">100%</span><button id="zoomIn" title="Увеличить">+</button></span>
-      </div>
-      <div class="mtool-hint" id="mtoolHint"></div>
-    </div>
-    <div class="preview" id="preview"></div>
-    <div class="layers" id="layers"></div>
-
-    <div class="ai-row">
-      <button class="btn-primary" id="recognizeBtn" disabled>Считать данные с чертежа (ИИ)</button>
-      <button class="link-btn" id="serverBtn">⚙ сервер распознавания</button>
-    </div>
-    <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;color:var(--muted);cursor:pointer;">
-      <input type="checkbox" id="geometryModeCheckbox">
-      🧪 Экспериментально: посчитать периметр/углы/светильники по геометрии и значкам (не проверено — риск ошибки в деньгах, всегда сверяй перед отправкой клиенту)
-    </label>
-
-    <div id="aiOutput"></div>
+    <div class="bar"><div id="teamBar" style="width:0%"></div></div>
+    <div class="team-meta" id="teamMeta"></div>
   </div>
 
-  <!-- ПРАВАЯ ПАНЕЛЬ: СМЕТА -->
-  <div class="panel print-area">
-    <h2>Смета</h2>
-
-    <div class="top-row">
-      <input type="text" id="clientName" placeholder="Имя клиента (для сохранения расчёта)">
-      <button class="btn-primary" id="saveCalcBtn">Сохранить расчёт</button>
-      <button class="btn-secondary" id="kpFolderBtn">📁 Мои КП</button>
-    </div>
-    <div id="kpFolderPanel" style="display:none;border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:16px;background:var(--bg);max-height:280px;overflow-y:auto;"></div>
-
-    <div class="ref-list" id="refList"></div>
-
-    <div class="new-pos">
-      <input type="text" id="newPosName" placeholder='Новая позиция, напр. «Профиль Сигма»'>
-      <select id="newPosUnit">
-        <option value="м²">м²</option>
-        <option value="м">м</option>
-        <option value="шт">шт</option>
-      </select>
-      <input type="number" id="newPosPrice" placeholder="цена">
-      <button class="btn-secondary" id="addRefBtn">+ в справочник</button>
-    </div>
-
-    <table class="smeta">
-      <thead>
-        <tr><th>Наименование</th><th>Ед.</th><th>Кол-во</th><th>Цена, ₽</th><th>Сумма, ₽</th><th></th></tr>
-      </thead>
-      <tbody id="smetaBody"></tbody>
-    </table>
-    <div class="empty-hint" id="emptyHint">Нажми позицию в справочнике выше, чтобы добавить строку</div>
-
-    <div class="totals">
-      <div class="left">
-        Итого позиций: <span id="rowCount">0</span>
-        <span class="warn" id="unfilledWarn"></span>
-      </div>
-      <div class="sum" id="totalSum">0 ₽</div>
-    </div>
-
-    <div class="actions">
-      <button class="btn-secondary" id="addEmptyRowBtn">+ Пустая строка</button>
-      <button class="btn-secondary" id="newCalcBtn">Новый расчёт</button>
-      <button class="btn-secondary" id="copyBtn">Скопировать смету</button>
-      <button class="btn-secondary" id="pdfBtn">Скачать PDF</button>
-    </div>
-  </div>
-
+  <div id="status" class="status">Загрузка…</div>
+  <div class="grid" id="grid"></div>
 </div>
 
-<div class="toast" id="toast"></div>
+<div class="modal-bg" id="nameModal" style="display:none">
+  <div class="modal">
+    <div class="step1">
+      <h2>Как вас зовут?</h2>
+      <p>Так команда узнает вашу карточку. Запомним в этом браузере.</p>
+      <input id="nameInput" placeholder="Имя">
+      <button id="nameNext">Далее</button>
+    </div>
+    <div class="step2" id="declStep">
+      <h2>Вставьте декларацию</h2>
+      <p>Скопируйте весь текст декларации (нумерованные пункты 1., 2., 3.…) — разберём на задачи автоматически. Можно пропустить и добавить пункты вручную позже.</p>
+      <textarea id="declInput" placeholder="1. Первый пункт...&#10;2. Второй пункт..."></textarea>
+      <button id="declParseBtn">Разобрать и начать</button>
+      <button id="declSkipBtn" class="skip">Пропустить, добавлю вручную</button>
+    </div>
+  </div>
+</div>
 
 <script>
-// ---------- Справочник по умолчанию (под реальные формулировки Романа) ----------
-const DEFAULT_REF = [
-  {name:"Полотно Бауф", unit:"м²", price:800},
-  {name:"Полотно МСД", unit:"м²", price:500},
-  {name:"Монтаж теневого профиля Еврокраб, натяжка полотна в теневой профиль", unit:"м", price:1600},
-  {name:"Монтаж стандартного профиля со вставкой, натяжка полотна в стандартный профиль", unit:"м", price:700},
-  {name:"Монтаж парящего профиля со вставкой, натяжка полотна в парящий профиль", unit:"м", price:2500},
-  {name:"Монтаж профиля Сигма для ниши под электрокарниз", unit:"м", price:4000},
-  {name:"Запил, стык, обработка углов профиля", unit:"шт", price:1000},
-  {name:"Монтаж доп. углов", unit:"шт", price:200},
-  {name:"Монтаж встроенной трековой системы", unit:"м", price:3000},
-  {name:"Монтаж световых линий", unit:"м", price:3000},
-  {name:"Монтаж углов световых линий", unit:"шт", price:2000},
-  {name:"Монтаж закладной с установкой встраиваемого светильника", unit:"шт", price:700},
-  {name:"Монтаж закладной с установкой люстры / подвесного светильника", unit:"шт", price:2000},
-  {name:"Монтаж встроенного карниза", unit:"м", price:4000},
-  {name:"Монтаж электрокарниза", unit:"м", price:0},
-  {name:"Монтаж карниза для шторки в ванную", unit:"м", price:4000},
-  {name:"Монтаж по керамограниту", unit:"м", price:800},
-  {name:"Монтаж теневого диффузора с канальным вентилятором", unit:"шт", price:5000},
-  {name:"Монтаж обвода трубы", unit:"шт", price:1000},
-  {name:"Монтаж бруса под шкаф", unit:"м", price:1000},
-  {name:"Монтаж закладной с установкой вентилятора", unit:"шт", price:2000},
-  {name:"Запил радиуса для карниза шторки", unit:"шт", price:5000},
-];
+// ЗАМЕНИТЕ на ваш URL веб-приложения Apps Script (заканчивается на /exec)
+const APPS_SCRIPT_URL = "ВСТАВЬТЕ_СЮДА_URL_ПОСЛЕ_РАЗВЕРТЫВАНИЯ";
+const POLL_MS = 5000;
 
-const LS_REF = "smeta_reference_v1";
-const LS_PROJECTS = "smeta_saved_projects_v1";
-const LS_DRAFT = "smeta_current_draft_v1"; // текущая работа — чтобы ничего не терялось при перезагрузке вкладки
-const LS_SERVER = "smeta_server_url";
-const DEFAULT_SERVER_URL = "https://smeta-ai-reader.islam-pragma.workers.dev";
+const gridEl = document.getElementById('grid');
+const statusEl = document.getElementById('status');
+const teamCard = document.getElementById('teamCard');
+const teamPct = document.getElementById('teamPct');
+const teamBar = document.getElementById('teamBar');
+const teamCount = document.getElementById('teamCount');
+const teamMeta = document.getElementById('teamMeta');
+const nameModal = document.getElementById('nameModal');
+const nameInput = document.getElementById('nameInput');
+const nameNext = document.getElementById('nameNext');
+const step1 = document.querySelector('.step1');
+const step2 = document.getElementById('declStep');
+const declInput = document.getElementById('declInput');
+const declParseBtn = document.getElementById('declParseBtn');
+const declSkipBtn = document.getElementById('declSkipBtn');
 
-let reference = JSON.parse(localStorage.getItem(LS_REF) || "null") || DEFAULT_REF.slice();
-let rows = []; // {name, unit, qty, price}
-// Страница: {src:'pdf'|'image', pdf, pageNum, thumbUrl, preview, dataUrl, mediaType, base64, category, selected}
-let pages = [];
-let activePage = 0;
+let myName = localStorage.getItem('declTrackerName') || '';
+let members = {}; // name -> {name, tasks:[{id,text,target,current}]}
+let saveTimer = null;
 
-// ---------- Справочник ----------
-function saveReference(){ localStorage.setItem(LS_REF, JSON.stringify(reference)); }
+function uid() { return 't' + Math.random().toString(36).slice(2, 9); }
 
-function renderReference(){
-  const el = document.getElementById("refList");
-  el.innerHTML = "";
-  reference.forEach((item, idx) => {
-    const div = document.createElement("div");
-    div.className = "ref-item";
-    const span = document.createElement("span");
-    span.textContent = "+ " + item.name;
-    span.style.cursor = "pointer";
-    span.onclick = () => addRow(item);
-    div.appendChild(span);
+// прогресс одной задачи: current/target, но не больше 100%
+function taskPct(t) {
+  const target = t.target || 1;
+  return target ? Math.min(100, Math.round((t.current / target) * 100)) : 0;
+}
+function taskDone(t) { return t.current >= (t.target || 1); }
 
-    const editBtn = document.createElement("button");
-    editBtn.textContent = "✎";
-    editBtn.title = "Редактировать";
-    editBtn.onclick = (e) => {
-      e.stopPropagation();
-      const newName = prompt("Название позиции:", item.name);
-      if (newName === null) return;
-      const newUnit = prompt("Единица (м², м, шт):", item.unit) || item.unit;
-      const newPrice = prompt("Цена, ₽:", item.price);
-      item.name = newName.trim() || item.name;
-      item.unit = newUnit.trim() || item.unit;
-      item.price = parseFloat(newPrice) || item.price || 0;
-      saveReference();
-      renderReference();
-    };
-    div.appendChild(editBtn);
-
-    const rmBtn = document.createElement("button");
-    rmBtn.className = "rm";
-    rmBtn.textContent = "×";
-    rmBtn.title = "Удалить из справочника";
-    rmBtn.onclick = (e) => {
-      e.stopPropagation();
-      if (confirm("Удалить «" + item.name + "» из справочника?")) {
-        reference.splice(idx, 1);
-        saveReference();
-        renderReference();
-      }
-    };
-    div.appendChild(rmBtn);
-
-    el.appendChild(div);
+// общий процент по списку задач: сумма выполненного / сумма целей
+function overallPct(tasks) {
+  if (!tasks || !tasks.length) return 0;
+  let done = 0, total = 0;
+  tasks.forEach(t => {
+    const target = t.target || 1;
+    done += Math.min(t.current, target);
+    total += target;
   });
+  return total ? Math.round((done / total) * 100) : 0;
 }
 
-document.getElementById("addRefBtn").onclick = () => {
-  const name = document.getElementById("newPosName").value.trim();
-  const unit = document.getElementById("newPosUnit").value;
-  const price = parseFloat(document.getElementById("newPosPrice").value) || 0;
-  if (!name) { toast("Впиши название позиции"); return; }
-  reference.push({name, unit, price});
-  saveReference();
-  renderReference();
-  document.getElementById("newPosName").value = "";
-  document.getElementById("newPosPrice").value = "";
-};
+// ------- разбор вставленного текста декларации -------
+function parseDeclaration(text) {
+  const lines = text.split('\n');
+  const tasks = [];
+  lines.forEach(line => {
+    const m = line.match(/^\s*(\d{1,2})[.)]\s*(.+)$/);
+    if (!m) return;
+    let body = m[2].trim();
+    let target = 1, current = 0;
 
-// ---------- Смета ----------
-let aiDraft = null; // безопасные числа с чертежа, заполняются после распознавания
-let aiEstimates = null; // непроверенные геометрические оценки (экспериментальный режим)
-
-function guessQty(item){
-  if (!aiDraft) return { qty: null, estimated: false };
-  const name = item.name;
-  if (name.includes("Полотно")) return { qty: aiDraft.area_sqm ?? null, estimated: !!aiDraft.areaEstimated };
-  if (name === "Монтаж встроенной трековой системы" && sumLen(aiEstimates?.track_lines) != null) {
-    return { qty: sumLen(aiEstimates.track_lines), estimated: true };
-  }
-  if (name === "Монтаж парящего профиля со вставкой, натяжка полотна в парящий профиль" && sumLen(aiEstimates?.backlight_lines) != null) {
-    return { qty: sumLen(aiEstimates.backlight_lines), estimated: true };
-  }
-  if (name === "Монтаж бруса под шкаф" && sumLen(aiEstimates?.wardrobe_niches) != null) {
-    return { qty: sumLen(aiEstimates.wardrobe_niches), estimated: true };
-  }
-  if (name === "Монтаж теневого профиля Еврокраб, натяжка полотна в теневой профиль") {
-    if (aiDraft.shadowProfileLen != null) return { qty: aiDraft.shadowProfileLen, estimated: false };
-    if (aiEstimates?.perimeter_estimate_m != null) return { qty: aiEstimates.perimeter_estimate_m, estimated: true };
-    return { qty: null, estimated: false };
-  }
-  if (name === "Монтаж стандартного профиля со вставкой, натяжка полотна в стандартный профиль") {
-    return { qty: aiDraft.standardProfileLen ?? null, estimated: false };
-  }
-  if (name === "Монтаж электрокарниза") return { qty: aiDraft.electroCorniceLen ?? null, estimated: false };
-  if (name === "Запил, стык, обработка углов профиля" && aiEstimates?.corner_count_estimate != null) {
-    return { qty: aiEstimates.corner_count_estimate, estimated: true };
-  }
-  if (name === "Монтаж световых линий") {
-    const v = sumLen(aiEstimates?.light_lines) ?? aiEstimates?.linear_light_length_estimate_m;
-    if (v != null) return { qty: v, estimated: true };
-  }
-  if (name === "Монтаж углов световых линий" && aiEstimates?.linear_light_corners_estimate != null) {
-    return { qty: aiEstimates.linear_light_corners_estimate, estimated: true };
-  }
-  if (name === "Монтаж закладной с установкой встраиваемого светильника" && aiEstimates?.builtin_fixture_count_estimate != null) {
-    return { qty: aiEstimates.builtin_fixture_count_estimate, estimated: true };
-  }
-  if (name === "Монтаж закладной с установкой люстры / подвесного светильника" && aiEstimates?.pendant_fixture_count_estimate != null) {
-    return { qty: aiEstimates.pendant_fixture_count_estimate, estimated: true };
-  }
-  return { qty: null, estimated: false };
-}
-
-// После распознавания заполняет пустые количества в строках, добавленных ДО распознавания
-function fillEmptyRows(){
-  let changed = false;
-  rows.forEach(r => {
-    if (r.qty != null && r.qty !== "") return;
-    const { qty, estimated } = guessQty({name: r.name || ""});
-    if (qty == null) return;
-    r.qty = qty;
-    r.aiGuessed = !estimated;
-    r.aiEstimated = estimated;
-    changed = true;
-  });
-  if (changed) renderSmeta();
-}
-
-function addRow(item){
-  const { qty, estimated } = guessQty(item);
-  rows.push({name:item.name, unit:item.unit, qty, price:item.price || 0, aiGuessed: qty !== null && !estimated, aiEstimated: estimated && qty !== null});
-  renderSmeta();
-}
-document.getElementById("addEmptyRowBtn").onclick = () => {
-  rows.push({name:"", unit:"м²", qty:null, price:0});
-  renderSmeta();
-};
-
-function renderSmeta(){
-  const body = document.getElementById("smetaBody");
-  body.innerHTML = "";
-  document.getElementById("emptyHint").style.display = rows.length ? "none" : "block";
-
-  let total = 0, unfilled = 0;
-
-  rows.forEach((row, idx) => {
-    const tr = document.createElement("tr");
-
-    const tdName = document.createElement("td");
-    if (row.name) {
-      tdName.textContent = row.name;
+    // "3 из 12" или "3из 12"
+    let mm = body.match(/(\d+)\s*из\s*(\d+)/i);
+    if (mm) {
+      current = parseInt(mm[1], 10);
+      target = parseInt(mm[2], 10);
     } else {
-      const inp = document.createElement("input");
-      inp.type = "text";
-      inp.placeholder = "название";
-      inp.style.width = "100%";
-      inp.value = row.name;
-      inp.oninput = () => { row.name = inp.value; };
-      tdName.appendChild(inp);
+      // "30/60"
+      mm = body.match(/(\d+)\s*\/\s*(\d+)/);
+      if (mm) {
+        current = parseInt(mm[1], 10);
+        target = parseInt(mm[2], 10);
+      } else {
+        // "Итого 12", "Итого: 4"
+        mm = body.match(/Итого[:\s]*?(\d+)/i);
+        if (mm) {
+          target = parseInt(mm[1], 10);
+          current = 0;
+        }
+      }
     }
-    tr.appendChild(tdName);
+    if (!target || target < 1) target = 1;
 
-    const tdUnit = document.createElement("td");
-    tdUnit.textContent = row.unit;
-    tr.appendChild(tdUnit);
+    // убираем декоративные галочки/крестики из текста
+    body = body.replace(/[✅❌☑️✔️]/g, '').replace(/\s{2,}/g, ' ').trim();
 
-    const tdQty = document.createElement("td");
-    const qtyInput = document.createElement("input");
-    qtyInput.type = "number";
-    qtyInput.className = "qty" + (row.qty === null || row.qty === "" ? " empty" : "") + (row.aiGuessed ? " ai-guessed" : "") + (row.aiEstimated ? " ai-estimated" : "");
-    qtyInput.title = row.aiGuessed ? "Подставлено ИИ с чертежа — проверь перед отправкой клиенту" : (row.aiEstimated ? "Непроверенная оценка по геометрии/значкам — обязательно сверь вручную!" : "");
-    qtyInput.value = row.qty === null ? "" : row.qty;
-    qtyInput.step = "any";
-    qtyInput.oninput = () => {
-      row.qty = qtyInput.value === "" ? null : parseFloat(qtyInput.value);
-      row.aiGuessed = false;
-      row.aiEstimated = false;
-      row.measured = false;
-      qtyInput.className = "qty" + (row.qty === null || isNaN(row.qty) ? " empty" : "");
-      renderSmeta();
-    };
-    tdQty.appendChild(qtyInput);
-    if (row.aiGuessed) {
-      const tag = document.createElement("span");
-      tag.textContent = " ИИ";
-      tag.title = "Подставлено с чертежа — проверь";
-      tag.style.cssText = "color:#2c8a4e;font-size:11px;margin-left:4px;";
-      tdQty.appendChild(tag);
-    }
-    if (row.measured) {
-      const tag = document.createElement("span");
-      tag.textContent = " 📐 по чертежу";
-      tag.title = "Посчитано вручную на чертеже инструментом счёта/замера";
-      tag.style.cssText = "color:#1d6fd6;font-size:11px;margin-left:4px;";
-      tdQty.appendChild(tag);
-    }
-    if (row.aiEstimated) {
-      const tag = document.createElement("span");
-      tag.textContent = " ⚠ оценка";
-      tag.title = "Непроверенная оценка по геометрии/значкам — обязательно сверь вручную!";
-      tag.style.cssText = "color:#c07a1a;font-size:11px;margin-left:4px;";
-      tdQty.appendChild(tag);
-    }
-    tr.appendChild(tdQty);
-
-    const tdPrice = document.createElement("td");
-    const priceInput = document.createElement("input");
-    priceInput.type = "number";
-    priceInput.className = "price";
-    priceInput.value = row.price || 0;
-    priceInput.oninput = () => { row.price = parseFloat(priceInput.value) || 0; renderSmeta(); };
-    tdPrice.appendChild(priceInput);
-    tr.appendChild(tdPrice);
-
-    const sum = (row.qty && !isNaN(row.qty)) ? row.qty * row.price : 0;
-    const tdSum = document.createElement("td");
-    tdSum.textContent = sum ? sum.toLocaleString("ru-RU") : "—";
-    tr.appendChild(tdSum);
-
-    const tdRm = document.createElement("td");
-    const rmBtn = document.createElement("button");
-    rmBtn.className = "rm";
-    rmBtn.textContent = "✕";
-    rmBtn.onclick = () => { rows.splice(idx, 1); renderSmeta(); };
-    tdRm.appendChild(rmBtn);
-    tr.appendChild(tdRm);
-
-    body.appendChild(tr);
-
-    total += sum;
-    if (row.qty === null || row.qty === "" || isNaN(row.qty)) unfilled++;
+    tasks.push({ id: uid(), text: body, target, current });
   });
-
-  document.getElementById("rowCount").textContent = rows.length;
-  document.getElementById("totalSum").textContent = total.toLocaleString("ru-RU") + " ₽";
-  document.getElementById("unfilledWarn").textContent = unfilled ? ` · не заполнено кол-во: ${unfilled}` : "";
-  saveDraft();
-  if (typeof mtRenderLayers === "function" && document.getElementById("layers")) mtRenderLayers();
+  return tasks;
 }
 
-// ---------- Автосохранение ----------
-// Сохраняет текущую смету и результат распознавания при каждом изменении.
-// На телефоне браузер может перезагрузить вкладку, пока человек отвлёкся, — работа не пропадёт.
-let lastAiData = null;
-function saveDraft(){
+function ensureName() {
+  if (myName) return true;
+  nameModal.style.display = 'flex';
+  return false;
+}
+
+nameNext.addEventListener('click', () => {
+  const v = nameInput.value.trim();
+  if (!v) return;
+  myName = v;
+  step1.style.display = 'none';
+  step2.style.display = 'block';
+});
+
+function finishOnboarding(tasks) {
+  localStorage.setItem('declTrackerName', myName);
+  nameModal.style.display = 'none';
+  if (!members[myName]) members[myName] = { name: myName, tasks: [] };
+  if (tasks && tasks.length) members[myName].tasks = tasks;
+  render();
+  saveMine();
+}
+declParseBtn.addEventListener('click', () => {
+  const tasks = parseDeclaration(declInput.value);
+  finishOnboarding(tasks);
+});
+declSkipBtn.addEventListener('click', () => finishOnboarding([]));
+
+async function fetchAll() {
   try {
-    const clientName = document.getElementById("clientName").value.trim();
-    localStorage.setItem(LS_DRAFT, JSON.stringify({ rows, clientName, aiData: lastAiData, savedAt: new Date().toISOString() }));
-    // Если имя клиента вписано — расчёт сразу обновляется и в «Мои КП»
-    if (clientName && rows.length){
-      const all = JSON.parse(localStorage.getItem(LS_PROJECTS) || "{}");
-      all[clientName] = { rows, aiData: lastAiData, savedAt: new Date().toISOString() };
-      localStorage.setItem(LS_PROJECTS, JSON.stringify(all));
-    }
-  } catch(e){ /* переполнение памяти браузера — не критично */ }
-}
-function showAiData(data){
-  lastAiData = data;
-  if (!data){ document.getElementById("aiOutput").innerHTML = ""; aiDraft = null; aiEstimates = null; return; }
-  renderAiResult(data);
-  computeAiDraft(data);
-  aiEstimates = data.geometry_estimates || null;
-  if (aiEstimates && data._geometryMode) renderGeometryEstimates(aiEstimates); else if (!data._geometryMode) aiEstimates = null;
-}
-function restoreDraft(){
-  let d = null;
-  try { d = JSON.parse(localStorage.getItem(LS_DRAFT) || "null"); } catch(e){}
-  if (!d) return;
-  if (Array.isArray(d.rows)) rows = d.rows;
-  if (d.clientName) document.getElementById("clientName").value = d.clientName;
-  if (d.aiData) showAiData(d.aiData);
-  if ((d.rows && d.rows.length) || d.aiData) toast("Восстановлен последний расчёт");
-}
-
-document.getElementById("clientName").addEventListener("input", () => saveDraft());
-
-document.getElementById("newCalcBtn").onclick = () => {
-  if (rows.length && !confirm("Начать новый расчёт? Текущая смета останется в «Мои КП», если было вписано имя клиента.")) return;
-  rows = [];
-  document.getElementById("clientName").value = "";
-  showAiData(null);
-  renderSmeta();
-};
-
-// ---------- Сохранение расчёта по клиенту ----------
-document.getElementById("saveCalcBtn").onclick = () => {
-  const name = document.getElementById("clientName").value.trim();
-  if (!name) { toast("Впиши имя клиента"); return; }
-  const all = JSON.parse(localStorage.getItem(LS_PROJECTS) || "{}");
-  all[name] = { rows, aiData: lastAiData, savedAt: new Date().toISOString() };
-  localStorage.setItem(LS_PROJECTS, JSON.stringify(all));
-  toast("Расчёт сохранён для «" + name + "»");
-  if (document.getElementById("kpFolderPanel").style.display !== "none") renderKpFolder();
-};
-
-// ---------- Папка сохранённых КП ----------
-document.getElementById("kpFolderBtn").onclick = () => {
-  const panel = document.getElementById("kpFolderPanel");
-  const opening = panel.style.display === "none";
-  panel.style.display = opening ? "block" : "none";
-  if (opening) renderKpFolder();
-};
-
-function renderKpFolder(){
-  const panel = document.getElementById("kpFolderPanel");
-  const all = JSON.parse(localStorage.getItem(LS_PROJECTS) || "{}");
-  const names = Object.keys(all).sort((a, b) => new Date(all[b].savedAt) - new Date(all[a].savedAt));
-
-  if (!names.length) {
-    panel.innerHTML = `<div style="color:var(--muted);font-size:13px;">Пока нет сохранённых расчётов. Впиши имя клиента и нажми «Сохранить расчёт».</div>`;
-    return;
+    const res = await fetch(APPS_SCRIPT_URL, { method: 'GET' });
+    const data = await res.json();
+    const next = {};
+    (data.members || []).forEach(m => { next[m.name] = m; });
+    members = next;
+    statusEl.style.display = 'none';
+    render();
+  } catch (e) {
+    statusEl.style.display = 'block';
+    statusEl.textContent = 'Не удалось загрузить данные. Проверьте APPS_SCRIPT_URL.';
+    console.error(e);
   }
-
-  panel.innerHTML = "";
-  names.forEach(name => {
-    const entry = all[name];
-    const total = (entry.rows || []).reduce((s, r) => s + ((r.qty && !isNaN(r.qty)) ? r.qty * r.price : 0), 0);
-    const date = entry.savedAt ? new Date(entry.savedAt).toLocaleString("ru-RU", {day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit"}) : "";
-
-    const row = document.createElement("div");
-    row.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:8px 4px;border-bottom:1px solid var(--border);gap:8px;";
-
-    const info = document.createElement("div");
-    info.innerHTML = `<strong>${escapeHtml(name)}</strong><br><span style="color:var(--muted);font-size:12px;">${date} · ${(entry.rows||[]).length} позиций · ${total.toLocaleString("ru-RU")} ₽</span>`;
-    row.appendChild(info);
-
-    const btns = document.createElement("div");
-    btns.style.cssText = "display:flex;gap:6px;flex-shrink:0;";
-
-    const openBtn = document.createElement("button");
-    openBtn.className = "btn-secondary";
-    openBtn.textContent = "Открыть";
-    openBtn.onclick = () => {
-      rows = JSON.parse(JSON.stringify(entry.rows || []));
-      document.getElementById("clientName").value = name;
-      showAiData(entry.aiData || null);
-      renderSmeta();
-      document.getElementById("kpFolderPanel").style.display = "none";
-      toast("Открыт расчёт «" + name + "»");
-    };
-    btns.appendChild(openBtn);
-
-    const delBtn = document.createElement("button");
-    delBtn.className = "btn-secondary";
-    delBtn.textContent = "✕";
-    delBtn.title = "Удалить";
-    delBtn.onclick = () => {
-      if (!confirm("Удалить сохранённый расчёт «" + name + "»?")) return;
-      delete all[name];
-      localStorage.setItem(LS_PROJECTS, JSON.stringify(all));
-      renderKpFolder();
-    };
-    btns.appendChild(delBtn);
-
-    row.appendChild(btns);
-    panel.appendChild(row);
-  });
 }
 
-// ---------- Копировать / PDF ----------
-document.getElementById("copyBtn").onclick = () => {
-  let text = "Наименование\tЕд.\tКол-во\tЦена\tСумма\n";
-  let total = 0;
-  rows.forEach(r => {
-    const sum = (r.qty && !isNaN(r.qty)) ? r.qty * r.price : 0;
-    total += sum;
-    text += `${r.name}\t${r.unit}\t${r.qty ?? ""}\t${r.price}\t${sum}\n`;
-  });
-  text += `\nИТОГО\t\t\t\t${total}`;
-  navigator.clipboard.writeText(text).then(() => toast("Смета скопирована"));
-};
-document.getElementById("pdfBtn").onclick = () => window.print();
-
-// ---------- Загрузка чертежа ----------
-const fileInput = document.getElementById("fileInput");
-const dropzone = document.getElementById("dropzone");
-dropzone.onclick = () => fileInput.click();
-["dragenter","dragover"].forEach(ev => dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.add("drag"); }));
-["dragleave","drop"].forEach(ev => dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.remove("drag"); }));
-dropzone.addEventListener("drop", e => { handleFiles(e.dataTransfer.files); });
-fileInput.addEventListener("change", e => handleFiles(e.target.files));
-
-// Какие листы нужны для расчёта и в каком порядке важности
-const CATS = {
-  ceiling:    {label:"План потолка",   prio:3, auto:true},
-  elevations: {label:"Развёртки",      prio:2, auto:true},
-  lighting:   {label:"Освещение",      prio:1, auto:true},
-  image:      {label:"Картинка",       prio:2, auto:true},
-  index:      {label:"Оглавление",     prio:0, auto:false},
-  other:      {label:"не нужен",       prio:0, auto:false},
-  unknown:    {label:"?",              prio:0, auto:false},
-};
-const MAX_SELECTED = 20;   // больше листов в расчёт не отправляем
-const BATCH_SIZE = 4;      // листов в одном запросе к ИИ
-const REQUEST_TIMEOUT_MS = 150000; // запрос дольше 2,5 минут считаем зависшим
-
-function setStatus(text){ document.getElementById("selSummary").innerHTML = text; }
-
-async function handleFiles(fileList){
-  const files = Array.from(fileList);
-  if (!files.length) return;
-  pages = [];
-  document.getElementById("fileNameLabel").textContent = files.map(f=>f.name).join(", ");
-  document.getElementById("recognizeBtn").disabled = true;
-  document.getElementById("aiOutput").innerHTML = "";
-  aiDraft = null;
-  aiEstimates = null;
-  mtReset();
-
-  for (const file of files){
-    if (file.type === "application/pdf"){
-      await addPdfPages(file);
-    } else if (file.type.startsWith("image/")){
-      await addImagePage(file);
-    }
-  }
-
-  // Определение по одному тексту ошибается (на планах тоже встречается слово «развёртка»),
-  // поэтому листы всегда определяет ИИ — по картинке и по надписям с листа. Текст — только запасной вариант.
-  const pdfPages = pages.filter(p => p.src === "pdf");
-  if (pdfPages.length) await classifyWithAi(pdfPages);
-
-  autoSelect();
-  activePage = Math.max(0, pages.findIndex(p => p.selected));
-  renderThumbs();
-  renderPreview();
-  renderSelectionSummary();
-  document.getElementById("recognizeBtn").disabled = !pages.some(p => p.selected);
-}
-
-function addImagePage(file){
-  return new Promise(resolve => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      pages.push({src:"image", dataUrl: reader.result, thumbUrl: reader.result, mediaType: file.type,
-                  base64: reader.result.split(",")[1], category:"image", selected:false});
-      resolve();
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
-async function renderPdfPage(p, scale, type, quality){
-  const page = await p.pdf.getPage(p.pageNum);
-  const viewport = page.getViewport({scale});
-  const canvas = document.createElement("canvas");
-  canvas.width = viewport.width;
-  canvas.height = viewport.height;
-  const ctx = canvas.getContext("2d");
-  ctx.fillStyle = "#fff";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  await page.render({canvasContext: ctx, viewport}).promise;
-  const url = canvas.toDataURL(type || "image/png", quality);
-  canvas.width = canvas.height = 0; // освобождаем память
-  return url;
-}
-
-async function addPdfPages(file){
-  const buf = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({data: buf}).promise;
-  for (let i = 1; i <= pdf.numPages; i++){
-    setStatus(`Читаю проект: лист ${i} из ${pdf.numPages}…`);
-    const p = {src:"pdf", pdf, pageNum:i, category:"unknown", selected:false};
-    p.thumbUrl = await renderPdfPage(p, fitScale(await pageSize(p), 240, 6e4), "image/jpeg", 0.7);
+function saveMine() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
     try {
-      const page = await pdf.getPage(i);
-      const tc = await page.getTextContent();
-      const strs = tc.items.map(it => (it.str || "").trim()).filter(Boolean);
-      p.category = p.textCategory = classifyByText(strs.join(" ")) || "unknown";
-      // Короткие строки с названиями листов/таблиц — подсказка для ИИ
-      const KEY = /план|разв[её]рт|спецификац|ведомост|схем|потол|освещ|светил|мебел|стен|электр|сантех|обмер|перегород|розет|выключ|плитк|двер|карниз|титул|содержан/i;
-      const seen = new Set(), hint = [];
-      for (const s of strs){
-        if (s.length < 4 || s.length > 70 || !KEY.test(s)) continue;
-        const k = s.toLowerCase();
-        if (seen.has(k)) continue;
-        seen.add(k); hint.push(s);
-        if (hint.join(" | ").length > 500) break;
-      }
-      p.hint = hint.join(" | ");
-    } catch(e){ p.category = "unknown"; }
-    pages.push(p);
-  }
-}
-
-// Определение листа по тексту PDF (бесплатно, без ИИ). null — если текстового слоя нет.
-function classifyByText(text){
-  const t = (text || "").toLowerCase().replace(/ё/g, "е").replace(/\s+/g, "");
-  if (t.length < 15) return null;
-  const titleHits = ["планпотолк","развертк","планосвещ","планрасстановкимебел","планполов","обмерныйплан"]
-    .filter(x => t.includes(x)).length;
-  if (/ведомость(рабочих)?(чертежей|листов)|содержаниепроекта|составпроекта/.test(t) || titleHits >= 3) return "index";
-  if (/планпотолк|потолочн[а-я]*план|планнатяжн|ведомостьнатяжн|спецификаци[а-я]*отделк[а-я]*потолк|отделк[а-я]потолк/.test(t)) return "ceiling";
-  if (/развертк/.test(t)) return "elevations";
-  if (/планосвещ|планрасстановкисветил|спецификаци[а-я]*светил/.test(t)) return "lighting";
-  return "other";
-}
-
-// Резерв для сканов без текста: ИИ смотрит уменьшенные листы и называет их
-async function classifyWithAi(list){
-  if (!list.length) return;
-  const serverUrl = localStorage.getItem(LS_SERVER) || DEFAULT_SERVER_URL;
-  const CHUNK = 12;
-  const chunks = [];
-  for (let s = 0; s < list.length; s += CHUNK) chunks.push(list.slice(s, s + CHUNK));
-  let done = 0;
-  setStatus(`Определяю, какие листы нужны для расчёта… 0 из ${chunks.length}`);
-  await runLimited(chunks.map(chunk => async () => {
-    try {
-      const images = [], texts = [];
-      for (const p of chunk){
-        const url = await renderPdfPage(p, fitScale(await pageSize(p), 1400, 1.2e6), "image/jpeg", 0.7);
-        images.push({mediaType:"image/jpeg", data:url.split(",")[1]});
-        texts.push(p.hint || "");
-      }
-      const resp = await fetch(serverUrl, {method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({mode:"classify", images, texts})});
-      const data = await resp.json();
-      (data.pages || []).forEach(r => {
-        const p = chunk[(r.n || 0) - 1];
-        if (p && CATS[r.category]){ p.category = r.category; p.aiTitle = r.title || ""; }
+      await fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' }, // избегаем CORS preflight
+        body: JSON.stringify({ name: myName, tasks: members[myName].tasks })
       });
-    } catch(e){ /* ИИ не ответил — для этих листов остаётся определение по тексту */ }
-    done++;
-    setStatus(`Определяю, какие листы нужны для расчёта… ${done} из ${chunks.length}`);
-  }), 3);
+    } catch (e) { console.error('save failed', e); }
+  }, 300);
 }
 
-// Размер листа в точках PDF
-async function pageSize(p){
-  const page = await p.pdf.getPage(p.pageNum);
-  const v = page.getViewport({scale: 1});
-  return {w: v.width, h: v.height};
-}
-// Масштаб, чтобы картинка не превышала maxSide по длинной стороне и maxPixels по площади
-// (на телефонах слишком большой холст молча получается пустым)
-function fitScale(size, maxSide, maxPixels){
-  const byMax = maxSide / Math.max(size.w, size.h);
-  const byArea = Math.sqrt(maxPixels / (size.w * size.h));
-  return Math.min(2.2, byMax, byArea);
-}
-
-function autoSelect(){
-  pages.forEach(p => { p.selected = !!(CATS[p.category] && CATS[p.category].auto); });
-  let sel = pages.filter(p => p.selected);
-  if (!sel.length){
-    // Ничего не распознали — по-старому берём первые листы, пусть человек поправит галочками
-    pages.slice(0, 12).forEach(p => p.selected = true);
-    return;
-  }
-  if (sel.length > MAX_SELECTED){
-    sel.sort((a,b) => CATS[b.category].prio - CATS[a.category].prio);
-    sel.slice(MAX_SELECTED).forEach(p => p.selected = false);
-  }
-}
-
-function pageRanges(nums){
-  const out = [];
-  nums.sort((a,b)=>a-b).forEach(n => {
-    const last = out[out.length-1];
-    if (last && n === last[1] + 1) last[1] = n; else out.push([n, n]);
+function render() {
+  const names = Object.keys(members);
+  let sumDone = 0, sumTotal = 0;
+  names.forEach(n => {
+    (members[n].tasks || []).forEach(t => {
+      const target = t.target || 1;
+      sumDone += Math.min(t.current, target);
+      sumTotal += target;
+    });
   });
-  return out.map(([a,b]) => a === b ? `${a}` : `${a}–${b}`).join(", ");
-}
-
-function renderSelectionSummary(){
-  if (!pages.length){ setStatus(""); return; }
-  const sel = pages.map((p,i) => ({p, n:i+1})).filter(x => x.p.selected);
-  const groups = {};
-  sel.forEach(x => { (groups[x.p.category] = groups[x.p.category] || []).push(x.n); });
-  const parts = Object.keys(groups).map(c => `${(CATS[c]||CATS.unknown).label} — л. ${pageRanges(groups[c])}`);
-  let html = `Всего листов: <strong>${pages.length}</strong>. В расчёт пойдут: <strong>${sel.length}</strong>`;
-  if (parts.length) html += ` (${parts.join("; ")})`;
-  html += `. Лишнее или пропущенное можно поправить галочками на миниатюрах.`;
-  if (!pages.some(p => p.category === "ceiling") && pages.some(p => p.src === "pdf")){
-    html += `<br><span style="color:#a06a1a;">⚠ План потолка в проекте не найден — площадь полотна может не посчитаться. Если он есть, отметь его галочкой.</span>`;
+  if (names.length) {
+    teamCard.style.display = 'block';
+    const tp = sumTotal ? Math.round((sumDone / sumTotal) * 100) : 0;
+    teamPct.textContent = tp + '%';
+    teamBar.style.width = tp + '%';
+    teamCount.textContent = names.length + ' участник(ов)';
+    teamMeta.textContent = 'Выполнено: ' + sumDone + ' из ' + sumTotal + ' (в единицах цели по пунктам)';
+  } else {
+    teamCard.style.display = 'none';
   }
-  if (sel.length > MAX_SELECTED){
-    html += `<br><span style="color:var(--danger);">Отмечено больше ${MAX_SELECTED} листов — лишние не отправятся, сними галочки с ненужных.</span>`;
+
+  const sorted = names.slice().sort((a, b) => (a === myName ? -1 : b === myName ? 1 : a.localeCompare(b)));
+  gridEl.innerHTML = '';
+  sorted.forEach(n => gridEl.appendChild(renderCard(n, members[n])));
+}
+
+function renderCard(name, data) {
+  const isMe = name === myName;
+  const tasks = data.tasks || [];
+  const p = overallPct(tasks);
+  const doneCount = tasks.filter(taskDone).length;
+
+  const card = document.createElement('div');
+  card.className = 'card' + (isMe ? ' me' : '');
+
+  const head = document.createElement('div');
+  head.className = 'card-head';
+  const nm = document.createElement('div');
+  nm.className = 'name-static';
+  nm.textContent = name;
+  head.appendChild(nm);
+  if (isMe) {
+    const tag = document.createElement('span');
+    tag.className = 'you-tag';
+    tag.textContent = 'ВЫ';
+    head.appendChild(tag);
   }
-  setStatus(html);
-  document.getElementById("recognizeBtn").disabled = sel.length === 0;
-}
+  card.appendChild(head);
 
-function renderThumbs(){
-  const el = document.getElementById("thumbs");
-  el.innerHTML = "";
-  pages.forEach((p, idx) => {
-    const div = document.createElement("div");
-    div.className = "thumb" + (p.selected ? " sel" : "") + (idx === activePage ? " active" : "");
-    div.title = "Лист " + (idx+1) + (p.aiTitle ? " — " + p.aiTitle : "");
-    const img = document.createElement("img");
-    img.src = p.thumbUrl;
-    div.appendChild(img);
-    const pg = document.createElement("span"); pg.className = "pg"; pg.textContent = idx + 1; div.appendChild(pg);
-    const cat = document.createElement("span"); cat.className = "cat"; cat.textContent = (CATS[p.category]||CATS.unknown).label; div.appendChild(cat);
-    const cb = document.createElement("input");
-    cb.type = "checkbox"; cb.checked = p.selected; cb.title = "Отправить этот лист в расчёт";
-    cb.onclick = e => { e.stopPropagation(); p.selected = cb.checked; renderThumbs(); renderSelectionSummary(); };
-    div.appendChild(cb);
-    div.onclick = () => { activePage = idx; renderPreview(); renderThumbs(); };
-    el.appendChild(div);
-  });
-}
+  const pctLine = document.createElement('div');
+  pctLine.className = 'card-pct';
+  pctLine.innerHTML = '<b>' + p + '%</b> декларации (' + doneCount + ' из ' + tasks.length + ' пунктов закрыто)';
+  card.appendChild(pctLine);
 
-async function renderPreview(){
-  const el = document.getElementById("preview");
-  el.innerHTML = "";
-  if (!pages.length) return;
-  const idx = activePage;
-  const p = pages[idx];
-  let url = p.src === "image" ? p.dataUrl : p.preview;
-  if (!url){
-    el.innerHTML = `<div style="padding:20px;color:var(--muted);font-size:13px;">Загружаю лист…</div>`;
-    url = p.preview = await renderPdfPage(p, fitScale(await pageSize(p), 2000, 3e6), "image/jpeg", 0.85);
-    if (activePage !== idx) return;
-    el.innerHTML = "";
+  const bar = document.createElement('div');
+  bar.className = 'bar';
+  const fill = document.createElement('div');
+  fill.style.width = p + '%';
+  if (p === 100) fill.style.background = 'var(--good)';
+  bar.appendChild(fill);
+  card.appendChild(bar);
+
+  const taskList = document.createElement('div');
+  taskList.className = 'tasks';
+  if (!tasks.length) {
+    const hint = document.createElement('div');
+    hint.className = 'empty-hint';
+    hint.textContent = isMe ? 'Вставьте декларацию или добавьте пункт ниже' : 'Пунктов пока нет';
+    taskList.appendChild(hint);
   }
-  const stage = document.createElement("div");
-  stage.className = "stage";
-  stage.style.width = (mtZoom * 100) + "%";
-  const img = document.createElement("img");
-  img.onload = () => { mtRenderMarks(); };
-  img.src = url;
-  stage.appendChild(img);
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.id = "mtSvg";
-  svg.addEventListener("click", mtOnClick);
-  stage.appendChild(svg);
-  el.appendChild(stage);
-  document.getElementById("mtool").hidden = false;
-  mtApplyMode();
-}
+  tasks.forEach(t => {
+    const target = t.target || 1;
+    const row = document.createElement('div');
+    row.className = 'task' + (taskDone(t) ? ' done' : '');
 
-// ---------- Ручной счёт и замер на чертеже ----------
-// Точки хранятся в пикселях картинки листа (не экрана), поэтому не зависят от масштаба просмотра.
-const MT_COLORS = ["#d62828", "#1d6fd6", "#2c8a4e", "#c07a1a", "#8e44ad", "#16a085", "#e84393"];
-let mtMode = "view";
-let mtZoom = 1;
-let mtLayers = [];        // {id, name, type:'count'|'length', color, points:[{page,x,y}], lines:[{page,pts:[[x,y]]}], targetRow}
-let mtActiveId = null;
-let mtDraft = null;       // линия, которую сейчас рисуют: {page, pts}
-let mtScaleFirst = null;  // первая точка при задании масштаба
-let mtSeq = 0;
-
-function mtReset(){
-  mtLayers = []; mtActiveId = null; mtDraft = null; mtScaleFirst = null; mtMode = "view"; mtZoom = 1;
-  document.getElementById("layers").innerHTML = "";
-  document.getElementById("mtool").hidden = true;
-}
-const mtActive = () => mtLayers.find(l => l.id === mtActiveId) || null;
-const mtImg = () => document.querySelector("#preview .stage img");
-
-function mtNewLayer(type, name){
-  const def = type === "count" ? "Светильники" : "Подсветка";
-  const n = name || prompt(type === "count" ? "Что считаем? (например: Светильники, Закладные под люстру)" : "Что меряем? (например: Подсветка, Трек, Ниша под шкаф)", def);
-  if (n === null) return null;
-  const layer = {id: ++mtSeq, name: n.trim() || def, type, color: MT_COLORS[(mtSeq - 1) % MT_COLORS.length], points: [], lines: [], targetRow: null};
-  mtLayers.push(layer);
-  mtActiveId = layer.id;
-  return layer;
-}
-
-function mtLayerTotal(l){
-  if (l.type === "count") return l.points.length;
-  let mm = 0;
-  const all = mtDraft && l.id === mtActiveId ? [...l.lines, mtDraft] : l.lines;
-  all.forEach(line => {
-    const s = pages[line.page] && pages[line.page].mmPerPx;
-    if (!s) return;
-    for (let i = 1; i < line.pts.length; i++){
-      mm += Math.hypot(line.pts[i][0] - line.pts[i-1][0], line.pts[i][1] - line.pts[i-1][1]) * s;
-    }
-  });
-  return Math.round(mm / 10) / 100; // метры, 2 знака
-}
-
-function mtSync(l){
-  if (!l.targetRow || !rows.includes(l.targetRow)) return;
-  l.targetRow.qty = mtLayerTotal(l);
-  l.targetRow.aiGuessed = false;
-  l.targetRow.aiEstimated = false;
-  l.targetRow.measured = true;
-  renderSmeta();
-}
-
-function mtSetMode(m){
-  if (mtDraft) mtFinishLine();
-  mtScaleFirst = null;
-  if (m === "count" && (!mtActive() || mtActive().type !== "count")){
-    const ex = mtLayers.filter(l => l.type === "count");
-    if (ex.length) mtActiveId = ex[ex.length - 1].id; else if (!mtNewLayer("count")) return;
-  }
-  if (m === "length"){
-    if (!pages[activePage].mmPerPx){
-      alert("Сначала задай масштаб этого листа: нажми на два конца любого размера на чертеже (например, размерной линии «4150») и впиши это число.");
-      m = "scale";
-    } else if (!mtActive() || mtActive().type !== "length"){
-      const ex = mtLayers.filter(l => l.type === "length");
-      if (ex.length) mtActiveId = ex[ex.length - 1].id; else if (!mtNewLayer("length")) return;
-    }
-  }
-  mtMode = m;
-  mtApplyMode();
-}
-
-function mtApplyMode(){
-  document.querySelectorAll(".mtool-bar button[data-mode]").forEach(b => b.classList.toggle("on", b.dataset.mode === mtMode));
-  document.getElementById("preview").classList.toggle("mt-active", mtMode !== "view");
-  const svg = document.getElementById("mtSvg");
-  if (svg) svg.style.pointerEvents = mtMode === "view" ? "none" : "auto";
-  const p = pages[activePage];
-  const scaleTxt = p && p.mmPerPx ? `Масштаб листа задан ✓` : `Масштаб листа не задан`;
-  const a = mtActive();
-  let hint = "";
-  if (mtMode === "view") hint = `Увеличь чертёж кнопкой «+», чтобы было удобно попадать по значкам. ${scaleTxt}.`;
-  if (mtMode === "count") hint = `Нажимай на каждый значок — «${escapeHtml(a ? a.name : "")}». Повторное нажатие на точку убирает её. Посчитано: <strong>${a ? mtLayerTotal(a) : 0}</strong>.`;
-  if (mtMode === "length") hint = `Нажимай по точкам вдоль линии «${escapeHtml(a ? a.name : "")}» (в каждом повороте). Сейчас: <strong>${a ? mtLayerTotal(a) : 0} м</strong>.<br>
-    <button onclick="mtFinishLine()">✓ Линия готова, следующая</button><button onclick="mtUndoPoint()">↶ Убрать точку</button>`;
-  if (mtMode === "scale") hint = mtScaleFirst
-    ? `Теперь нажми на второй конец этого размера.`
-    : `Нажми на начало любого подписанного размера на чертеже (например, размерной линии с числом 4150), потом на его конец. ${scaleTxt}.`;
-  document.getElementById("mtoolHint").innerHTML = hint;
-  document.getElementById("zoomVal").textContent = Math.round(mtZoom * 100) + "%";
-  mtRenderMarks();
-  mtRenderLayers();
-}
-
-function mtOnClick(e){
-  const img = mtImg();
-  if (!img || !img.naturalWidth) return;
-  const r = img.getBoundingClientRect();
-  const x = (e.clientX - r.left) / r.width * img.naturalWidth;
-  const y = (e.clientY - r.top) / r.height * img.naturalHeight;
-  const k = img.naturalWidth / r.width; // пикселей картинки в одном пикселе экрана
-  const p = pages[activePage];
-
-  if (mtMode === "scale"){
-    if (!mtScaleFirst){ mtScaleFirst = [x, y]; mtApplyMode(); return; }
-    const d = Math.hypot(x - mtScaleFirst[0], y - mtScaleFirst[1]);
-    const v = prompt("Сколько миллиметров между этими точками? Впиши число с чертежа (например, 4150):", "");
-    const mm = parseFloat(String(v || "").replace(",", "."));
-    if (mm > 0 && d > 3){
-      p.mmPerPx = mm / d;
-      p.scaleLine = [mtScaleFirst, [x, y], mm];
-      mtScaleFirst = null;
-      mtLayers.forEach(mtSync);
-      toast("Масштаб задан — теперь можно мерить длины");
-      mtSetMode("length");
-      return;
-    }
-    mtScaleFirst = null; mtApplyMode(); return;
-  }
-  const a = mtActive();
-  if (!a) return;
-  if (mtMode === "count"){
-    const R = 12 * k;
-    const i = a.points.findIndex(pt => pt.page === activePage && Math.hypot(pt.x - x, pt.y - y) < R);
-    if (i >= 0) a.points.splice(i, 1); else a.points.push({page: activePage, x, y});
-  }
-  if (mtMode === "length"){
-    if (mtDraft && mtDraft.page !== activePage) mtFinishLine();
-    if (!mtDraft) mtDraft = {page: activePage, pts: []};
-    mtDraft.pts.push([x, y]);
-  }
-  mtSync(a);
-  mtApplyMode();
-}
-
-function mtFinishLine(){
-  const a = mtActive();
-  if (mtDraft && a && mtDraft.pts.length > 1) a.lines.push(mtDraft);
-  mtDraft = null;
-  if (a) mtSync(a);
-  mtApplyMode();
-}
-function mtUndoPoint(){
-  const a = mtActive();
-  if (mtDraft && mtDraft.pts.length){ mtDraft.pts.pop(); if (!mtDraft.pts.length) mtDraft = null; }
-  else if (a && a.lines.length){ mtDraft = a.lines.pop(); mtDraft.pts.pop(); }
-  if (a) mtSync(a);
-  mtApplyMode();
-}
-
-function mtRenderMarks(){
-  const svg = document.getElementById("mtSvg");
-  const img = mtImg();
-  if (!svg || !img || !img.naturalWidth) return;
-  const W = img.naturalWidth, H = img.naturalHeight;
-  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-  const k = W / (img.getBoundingClientRect().width || W);
-  const pg = activePage;
-  let s = "";
-  const p = pages[pg];
-  if (p && p.scaleLine){
-    const [a, b, mm] = p.scaleLine;
-    s += `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="#555" stroke-width="${2*k}" stroke-dasharray="${6*k} ${4*k}"/>`;
-    s += `<text x="${(a[0]+b[0])/2}" y="${(a[1]+b[1])/2 - 6*k}" font-size="${12*k}" fill="#555" text-anchor="middle">масштаб ${mm} мм</text>`;
-  }
-  if (mtScaleFirst) s += `<circle cx="${mtScaleFirst[0]}" cy="${mtScaleFirst[1]}" r="${5*k}" fill="#555"/>`;
-  mtLayers.forEach(l => {
-    if (l.type === "count"){
-      let n = 0;
-      l.points.forEach(pt => {
-        n++;
-        if (pt.page !== pg) return;
-        s += `<circle cx="${pt.x}" cy="${pt.y}" r="${9*k}" fill="${l.color}" fill-opacity=".85" stroke="#fff" stroke-width="${1.5*k}"/>`;
-        s += `<text x="${pt.x}" y="${pt.y + 3.5*k}" font-size="${10*k}" fill="#fff" text-anchor="middle" font-weight="700">${n}</text>`;
+    if (target <= 1) {
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = !!taskDone(t);
+      cb.disabled = !isMe;
+      cb.addEventListener('change', () => {
+        t.current = cb.checked ? 1 : 0;
+        render(); saveMine();
       });
+      row.appendChild(cb);
     } else {
-      const lines = (mtDraft && l.id === mtActiveId) ? [...l.lines, mtDraft] : l.lines;
-      lines.forEach(line => {
-        if (line.page !== pg) return;
-        const pts = line.pts.map(q => q.join(",")).join(" ");
-        s += `<polyline points="${pts}" fill="none" stroke="${l.color}" stroke-width="${4*k}" stroke-opacity=".8" stroke-linejoin="round"/>`;
-        line.pts.forEach(q => { s += `<circle cx="${q[0]}" cy="${q[1]}" r="${4*k}" fill="${l.color}"/>`; });
+      const st = document.createElement('div');
+      st.className = 'stepper';
+      const minus = document.createElement('button');
+      minus.textContent = '−';
+      minus.disabled = !isMe;
+      minus.addEventListener('click', () => { t.current = Math.max(0, t.current - 1); render(); saveMine(); });
+      const cnt = document.createElement('span');
+      cnt.className = 'count';
+      cnt.textContent = t.current + ' / ' + target;
+      const plus = document.createElement('button');
+      plus.textContent = '+';
+      plus.disabled = !isMe;
+      plus.addEventListener('click', () => { t.current = Math.min(target, t.current + 1); render(); saveMine(); });
+      st.appendChild(minus); st.appendChild(cnt); st.appendChild(plus);
+      row.appendChild(st);
+    }
+
+    const span = document.createElement('span');
+    span.className = 'txt';
+    span.textContent = t.text;
+    row.appendChild(span);
+
+    if (isMe) {
+      const del = document.createElement('button');
+      del.className = 'del';
+      del.textContent = '✕';
+      del.addEventListener('click', () => {
+        members[myName].tasks = tasks.filter(x => x.id !== t.id);
+        render(); saveMine();
       });
+      row.appendChild(del);
     }
+    taskList.appendChild(row);
   });
-  svg.innerHTML = s;
-}
+  card.appendChild(taskList);
 
-function mtRenderLayers(){
-  const box = document.getElementById("layers");
-  if (!pages.length){ box.innerHTML = ""; return; }
-  box.innerHTML = "";
-  mtLayers.forEach(l => {
-    const div = document.createElement("div");
-    div.className = "layer" + (l.id === mtActiveId ? " active" : "");
-    const tot = mtLayerTotal(l);
-    const opts = rows.map((r, i) => `<option value="${i}" ${l.targetRow === r ? "selected" : ""}>${escapeHtml(r.name)}</option>`).join("");
-    div.innerHTML = `<span class="sw" style="background:${l.color}"></span>
-      <span class="nm" title="Сделать активным">${escapeHtml(l.name)}</span>
-      <select title="В какую строку сметы записать"><option value="">→ в смету…</option>${opts}</select>
-      <span class="tot">${l.type === "count" ? tot + " шт" : tot + " м"}</span>
-      <button data-a="undo" title="Отменить последнее">↶</button>
-      <button data-a="del" title="Удалить">✕</button>`;
-    div.querySelector(".nm").onclick = () => { if (mtDraft) mtFinishLine(); mtActiveId = l.id; mtMode = l.type; mtApplyMode(); };
-    div.querySelector("select").onchange = e => {
-      const i = e.target.value;
-      l.targetRow = i === "" ? null : rows[+i];
-      mtSync(l);
-      if (l.targetRow) toast(`«${l.name}» записывается в «${l.targetRow.name}»`);
+  if (isMe) {
+    const addRow = document.createElement('div');
+    addRow.className = 'add-row';
+    const inp = document.createElement('input');
+    inp.placeholder = 'Новый пункт декларации…';
+    const btn = document.createElement('button');
+    btn.textContent = 'Добавить';
+    const submit = () => {
+      const v = inp.value.trim();
+      if (!v) return;
+      members[myName].tasks.push({ id: uid(), text: v, target: 1, current: 0 });
+      inp.value = '';
+      render(); saveMine();
     };
-    div.querySelector('[data-a="undo"]').onclick = () => {
-      if (l.type === "count") l.points.pop();
-      else { if (mtDraft && l.id === mtActiveId) mtDraft = null; else l.lines.pop(); }
-      mtSync(l); mtApplyMode();
-    };
-    div.querySelector('[data-a="del"]').onclick = () => {
-      if (!confirm(`Удалить «${l.name}»?`)) return;
-      mtLayers = mtLayers.filter(x => x !== l);
-      if (mtActiveId === l.id){ mtActiveId = null; mtDraft = null; mtMode = "view"; }
-      mtApplyMode();
-    };
-    box.appendChild(div);
-  });
-  const add = document.createElement("div");
-  add.className = "layers-add";
-  add.innerHTML = `<button data-t="count">+ посчитать другие значки</button><button data-t="length">+ измерить другую линию</button>`;
-  add.querySelector('[data-t="count"]').onclick = () => { if (mtDraft) mtFinishLine(); if (mtNewLayer("count")){ mtMode = "count"; mtApplyMode(); } };
-  add.querySelector('[data-t="length"]').onclick = () => {
-    if (mtDraft) mtFinishLine();
-    if (!pages[activePage].mmPerPx){ mtSetMode("length"); return; }
-    if (mtNewLayer("length")){ mtMode = "length"; mtApplyMode(); }
-  };
-  box.appendChild(add);
-}
+    btn.addEventListener('click', submit);
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
+    addRow.appendChild(inp);
+    addRow.appendChild(btn);
+    card.appendChild(addRow);
 
-document.querySelectorAll(".mtool-bar button[data-mode]").forEach(b => b.onclick = () => mtSetMode(b.dataset.mode));
-function mtSetZoom(z){
-  const el = document.getElementById("preview");
-  const cx = (el.scrollLeft + el.clientWidth / 2) / (el.scrollWidth || 1);
-  const cy = (el.scrollTop + el.clientHeight / 2) / (el.scrollHeight || 1);
-  mtZoom = Math.min(6, Math.max(1, z));
-  const st = document.querySelector("#preview .stage");
-  if (st) st.style.width = (mtZoom * 100) + "%";
-  requestAnimationFrame(() => {
-    el.scrollLeft = cx * el.scrollWidth - el.clientWidth / 2;
-    el.scrollTop = cy * el.scrollHeight - el.clientHeight / 2;
-    mtApplyMode();
-  });
-}
-document.getElementById("zoomIn").onclick = () => mtSetZoom(mtZoom * 1.5);
-document.getElementById("zoomOut").onclick = () => mtSetZoom(mtZoom / 1.5);
+    const toggle = document.createElement('button');
+    toggle.className = 'paste-toggle';
+    toggle.textContent = tasks.length ? 'Заменить декларацию текстом целиком' : 'Вставить декларацию текстом целиком';
+    const box = document.createElement('div');
+    box.className = 'paste-box';
+    const ta = document.createElement('textarea');
+    ta.placeholder = '1. Первый пункт...\n2. Второй пункт...';
+    const btnRow = document.createElement('div');
+    btnRow.className = 'row';
+    const parseBtn = document.createElement('button');
+    parseBtn.className = 'parse-btn';
+    parseBtn.textContent = 'Разобрать';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'cancel-btn';
+    cancelBtn.textContent = 'Отмена';
+    const hint = document.createElement('div');
+    hint.className = 'paste-hint';
+    hint.textContent = 'Понимает нумерованные строки "1. текст", отметки прогресса "3 из 12" или "30/60".';
+    btnRow.appendChild(parseBtn); btnRow.appendChild(cancelBtn);
+    box.appendChild(ta); box.appendChild(btnRow); box.appendChild(hint);
 
-// ---------- Сервер распознавания ----------
-document.getElementById("serverBtn").onclick = () => {
-  const current = localStorage.getItem(LS_SERVER) || DEFAULT_SERVER_URL;
-  const url = prompt("Адрес сервера распознавания (Cloudflare Worker):", current);
-  if (url === null) return;
-  localStorage.setItem(LS_SERVER, url.trim());
-  toast("Адрес сервера сохранён");
-};
-
-async function pageForAi(p){
-  if (p.src === "image") return {mediaType: p.mediaType, data: p.base64};
-  const url = await renderPdfPage(p, fitScale(await pageSize(p), 3200, 7e6), "image/jpeg", 0.9);
-  return {mediaType: "image/jpeg", data: url.split(",")[1]};
-}
-
-// Запускает задачи не больше limit одновременно
-async function runLimited(tasks, limit){
-  const results = new Array(tasks.length);
-  let next = 0;
-  async function worker(){
-    while (next < tasks.length){
-      const i = next++;
-      results[i] = await tasks[i]();
-    }
-  }
-  await Promise.all(Array.from({length: Math.min(limit, tasks.length)}, worker));
-  return results;
-}
-
-document.getElementById("recognizeBtn").onclick = async () => {
-  const serverUrl = localStorage.getItem(LS_SERVER) || DEFAULT_SERVER_URL;
-  const out = document.getElementById("aiOutput");
-  const btn = document.getElementById("recognizeBtn");
-
-  let selected = pages.map((p, i) => ({p, n: i + 1})).filter(x => x.p.selected);
-  if (!selected.length) return;
-  // Самое важное — в начало: план потолка, потом развёртки, потом остальное
-  selected.sort((a, b) => ((CATS[b.p.category]||CATS.unknown).prio - (CATS[a.p.category]||CATS.unknown).prio) || (a.n - b.n));
-  selected = selected.slice(0, MAX_SELECTED);
-
-  const batches = [];
-  for (let i = 0; i < selected.length; i += BATCH_SIZE) batches.push(selected.slice(i, i + BATCH_SIZE));
-
-  let tick = null;
-  btn.disabled = true;
-  out.innerHTML = "";
-  const geometryMode = document.getElementById("geometryModeCheckbox").checked;
-  let done = 0;
-  btn.textContent = `Считаю… 0 из ${batches.length}`;
-
-  try {
-    // Одна порция; если ИИ вернул пустой ответ — делим порцию пополам и пробуем снова
-    const sendBatch = async (batch) => {
-      try {
-        const images = [];
-        for (const x of batch) images.push(await pageForAi(x.p));
-        const ctrl = new AbortController();
-        const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);
-        let resp;
-        try {
-          resp = await fetch(serverUrl, {
-            method: "POST",
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({images, geometryMode}),
-            signal: ctrl.signal
-          });
-        } finally { clearTimeout(timer); }
-        const data = await resp.json();
-        if (!resp.ok || data.error) return [{error: data.error || "неизвестная ошибка", raw: data.raw, emptyAnswer: data.raw !== undefined, pagesNums: batch.map(x => x.n)}];
-        return [{data, pagesNums: batch.map(x => x.n)}];
-      } catch (e){
-        const msg = e.name === "AbortError" ? "сервер не ответил за 2,5 минуты" : e.message;
-        return [{error: msg, pagesNums: batch.map(x => x.n)}];
-      }
-    };
-    // Делим порцию пополам только один раз и только если ИИ ответил пустотой
-    // (при обрыве связи или зависании повтор лишь удлиняет ожидание)
-    const processBatch = async (batch, canSplit = true) => {
-      const r = await sendBatch(batch);
-      if (r[0].error && r[0].emptyAnswer && canSplit && batch.length > 1){
-        const half = Math.ceil(batch.length / 2);
-        const parts = await Promise.all([processBatch(batch.slice(0, half), false), processBatch(batch.slice(half), false)]);
-        return parts.flat();
-      }
-      return r;
-    };
-    const t0 = Date.now();
-    tick = setInterval(() => {
-      const s = Math.round((Date.now() - t0) / 1000);
-      btn.textContent = `Считаю… готово ${done} из ${batches.length} · ${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}`;
-    }, 1000);
-    const nested = await runLimited(batches.map(batch => async () => {
-      const r = await processBatch(batch);
-      done++;
-      return r;
-    }), 3);
-    clearInterval(tick);
-    const results = nested.flat();
-
-    const ok = results.filter(r => r.data);
-    const failed = results.filter(r => r.error);
-    if (!ok.length){
-      const r = failed[0] || {};
-      let msg = `Не удалось распознать: ${escapeHtml(r.error || "неизвестная ошибка")}`;
-      if (r.raw !== undefined) {
-        const rawDisplay = r.raw ? escapeHtml(r.raw) : "(пустой ответ — модель ничего не вернула в текстовом блоке)";
-        msg += `<div style="margin-top:8px;padding-top:8px;border-top:1px solid #eecdc9;"><strong>Что вернул ИИ:</strong><br>${rawDisplay}</div>`;
-      }
-      out.innerHTML = `<div class="ai-error">${msg}</div>`;
-      return;
-    }
-
-    const data = mergeResults(ok.map(r => r.data));
-    data._usedPages = ok.flatMap(r => r.pagesNums);
-    data._failedPages = failed.flatMap(r => r.pagesNums);
-    data._geometryMode = geometryMode;
-    showAiData(data);
-    fillEmptyRows();
-    saveDraft();
-  } catch (e){
-    out.innerHTML = `<div class="ai-error">Не удалось связаться с сервером: ${escapeHtml(e.message)}</div>`;
-  } finally {
-    clearInterval(tick);
-    btn.disabled = false;
-    btn.textContent = "Считать данные с чертежа (ИИ)";
-  }
-};
-
-// Склеивает ответы по нескольким порциям листов в один
-function mergeResults(list){
-  if (list.length === 1) return list[0];
-  const m = {};
-  const arrays = {
-    fixtures: f => `${f.name}|${f.qty}`,
-    ceiling_profiles: p => `${p.mark}|${p.length_m}`,
-    curtain_cornices: c => `${c.mark}|${c.length_m}|${c.qty}`,
-    ceiling_material_areas: a => `${(a.material||"").toLowerCase()}|${a.area_sqm}`,
-    rooms: r => `${(r.name||"").toLowerCase()}|${r.area_sqm}`,
-    ceiling_zones: z => `${z.room_number}|${(z.material||"").toLowerCase()}|${z.area_sqm}`,
-    wall_elevation_perimeters: w => `${(w.room||"").toLowerCase()}|${w.perimeter_m}`,
-    ceiling_notes: n => (n.text||"").toLowerCase(),
-  };
-  Object.keys(arrays).forEach(k => {
-    const seen = new Set();
-    m[k] = [];
-    list.forEach(d => (Array.isArray(d[k]) ? d[k] : []).forEach(item => {
-      const key = arrays[k](item);
-      if (!seen.has(key)){ seen.add(key); m[k].push(item); }
-    }));
-  });
-  // Площадь/периметр: сначала из ведомости, иначе первое найденное
-  const pick = (valKey, srcKey) => {
-    const fromTable = list.find(d => d[valKey] != null && d[srcKey] === "ведомость");
-    const any = fromTable || list.find(d => d[valKey] != null);
-    m[valKey] = any ? any[valKey] : null;
-    m[srcKey] = any ? any[srcKey] : "не найдено";
-  };
-  pick("area_sqm", "area_source");
-  pick("perimeter_m", "perimeter_source");
-  m.profile_type = (list.find(d => d.profile_type) || {}).profile_type || null;
-  const notes = [...new Set(list.map(d => d.area_note).filter(Boolean))];
-  m.area_note = notes.length ? notes.join(" ") : null;
-  const ests = list.map(d => d.geometry_estimates).filter(Boolean);
-  if (ests.length){
-    const g = {};
-    ["perimeter_estimate_m","corner_count_estimate","linear_light_length_estimate_m","linear_light_corners_estimate",
-     "builtin_fixture_count_estimate","pendant_fixture_count_estimate"].forEach(k => {
-      const e = ests.find(x => x[k] != null);
-      g[k] = e ? e[k] : null;
+    toggle.addEventListener('click', () => box.classList.toggle('open'));
+    cancelBtn.addEventListener('click', () => { box.classList.remove('open'); ta.value = ''; });
+    parseBtn.addEventListener('click', () => {
+      const parsed = parseDeclaration(ta.value);
+      if (!parsed.length) return;
+      const replace = tasks.length ? confirm('Заменить текущие ' + tasks.length + ' пункт(ов) новой декларацией?') : true;
+      if (!replace) return;
+      members[myName].tasks = parsed;
+      ta.value = '';
+      box.classList.remove('open');
+      render(); saveMine();
     });
-    ["perimeter_by_zone","backlight_lines","track_lines","light_lines","wardrobe_niches"].forEach(k => {
-      g[k] = ests.flatMap(x => Array.isArray(x[k]) ? x[k] : []);
-    });
-    g.confidence_note = [...new Set(ests.map(x => x.confidence_note).filter(Boolean))].join(" ");
-    m.geometry_estimates = g;
+
+    card.appendChild(toggle);
+    card.appendChild(box);
   }
-  return m;
+
+  return card;
 }
 
-// Считает безопасные (табличные, не по значкам) числа и кладёт их в aiDraft —
-// они автоматически подставятся в поле "Кол-во", когда кликаешь позицию в справочнике.
-function computeAiDraft(data){
-  // Общую площадь берём только из ведомости. «Сумма по таблице помещений» — обычно площадь ПОЛА, её не подставляем.
-  const draft = { area_sqm: (data.area_source === "ведомость" ? (data.area_sqm ?? null) : null),
-                  shadowProfileLen: null, standardProfileLen: null, electroCorniceLen: null };
-
-  // Самый прямой источник: сводная таблица "материал потолка — площадь" (любое название)
-  if (Array.isArray(data.ceiling_material_areas) && data.ceiling_material_areas.length){
-    const isStretchMaterial = m => /натяжн|полотн|пвх/i.test(m || "");
-    let total = 0, any = false;
-    data.ceiling_material_areas.forEach(m => {
-      if (typeof m.area_sqm === "number" && isStretchMaterial(m.material)) { total += m.area_sqm; any = true; }
-    });
-    if (any) draft.area_sqm = Math.round(total * 100) / 100;
-  }
-
-  if (Array.isArray(data.ceiling_profiles) && data.ceiling_profiles.length){
-    let shadow = 0, standard = 0, any = false;
-    data.ceiling_profiles.forEach(p => {
-      if (typeof p.length_m !== "number") return;
-      any = true;
-      if ((p.type || "").toLowerCase().includes("тенев")) shadow += p.length_m;
-      else standard += p.length_m;
-    });
-    if (any){ draft.shadowProfileLen = shadow || null; draft.standardProfileLen = standard || null; }
-  }
-
-  if (Array.isArray(data.curtain_cornices) && data.curtain_cornices.length){
-    let total = 0, any = false;
-    data.curtain_cornices.forEach(c => {
-      if (typeof c.length_m === "number" && typeof c.qty === "number"){ total += c.length_m * c.qty; any = true; }
-    });
-    if (any) draft.electroCorniceLen = Math.round(total * 100) / 100;
-  }
-
-  // Резерв: если нет таблицы потолочных карнизов, но есть листы "Развёртки стен" —
-  // считаем периметр как сумму итоговых длин стен по всем комнатам
-  if (draft.shadowProfileLen === null && Array.isArray(data.wall_elevation_perimeters) && data.wall_elevation_perimeters.length){
-    let total = 0, any = false;
-    data.wall_elevation_perimeters.forEach(w => {
-      if (typeof w.perimeter_m === "number"){ total += w.perimeter_m; any = true; }
-    });
-    if (any) draft.shadowProfileLen = Math.round(total * 100) / 100;
-  }
-
-  const breakdown = computeCeilingBreakdown(data);
-  if (draft.area_sqm === null && breakdown.totals.stretch) {
-    // Площадь по зонам плана — используем, только если сводной таблицы не было
-    draft.area_sqm = breakdown.totals.stretch;
-  } else if (draft.area_sqm === null && breakdown.totals.other) {
-    // Зоны с площадями есть, но материал у них не подписан — подставим, но оранжевым «проверь»
-    draft.area_sqm = breakdown.totals.other;
-    draft.areaEstimated = true;
-  } else if (draft.area_sqm === null && Array.isArray(data.rooms) && data.rooms.length) {
-    // Резерв: если в самой таблице помещений явно написано, что это площадь потолка/полотна
-    // (а не площадь пола) — берём сумму оттуда
-    const isCeilingKind = k => /потолок|потолк|полотн|натяжн/i.test(k || "");
-    if (data.rooms.some(r => isCeilingKind(r.area_kind))) {
-      const total = data.rooms.reduce((s, r) => s + (typeof r.area_sqm === "number" ? r.area_sqm : 0), 0);
-      if (total) draft.area_sqm = Math.round(total * 100) / 100;
-    }
-  }
-
-  aiDraft = draft;
-  toast("Готово — при клике по справочнику подставятся числа с чертежа (отмечены зелёным)");
+async function init() {
+  ensureName();
+  await fetchAll();
+  setInterval(fetchAll, POLL_MS);
 }
-
-const r2 = n => (typeof n === "number" ? Math.round(n * 100) / 100 : n);
-const sumLen = arr => {
-  if (!Array.isArray(arr) || !arr.length) return null;
-  const s = arr.reduce((t, x) => t + (typeof x.length_m === "number" ? x.length_m : 0), 0);
-  return s ? r2(s) : null;
-};
-
-// Группирует подписанные на плане зоны потолка по номеру помещения и типу материала.
-function computeCeilingBreakdown(data){
-  const zones = Array.isArray(data.ceiling_zones) ? data.ceiling_zones : [];
-  const rooms = Array.isArray(data.rooms) ? data.rooms : [];
-
-  const byRoom = {}; // room_number -> {stretch, gkl, other}
-  let totalStretch = 0, totalGkl = 0, totalOther = 0, any = false;
-
-  zones.forEach(z => {
-    if (typeof z.area_sqm !== "number") return;
-    any = true;
-    const mat = (z.material || "").toLowerCase();
-    const key = z.room_number ?? "—";
-    if (!byRoom[key]) byRoom[key] = { stretch: 0, gkl: 0, other: 0 };
-
-    if (mat.includes("нат")) { byRoom[key].stretch += z.area_sqm; totalStretch += z.area_sqm; }
-    else if (mat.includes("гкл")) { byRoom[key].gkl += z.area_sqm; totalGkl += z.area_sqm; }
-    else { byRoom[key].other += z.area_sqm; totalOther += z.area_sqm; }
-  });
-
-  const rows = Object.keys(byRoom).map(key => {
-    const room = rooms.find(r => String(r.room_number) === String(key));
-    return {
-      room_number: key,
-      name: room ? room.name : (key === "—" ? "без номера" : `Помещение №${key}`),
-      stretch: r2(byRoom[key].stretch) || null,
-      gkl: r2(byRoom[key].gkl) || null,
-      other: r2(byRoom[key].other) || null,
-    };
-  });
-
-  return {
-    byRoomRows: rows,
-    totals: {
-      stretch: any ? Math.round(totalStretch * 100) / 100 : null,
-      gkl: any ? Math.round(totalGkl * 100) / 100 : null,
-      other: any ? Math.round(totalOther * 100) / 100 : null,
-    }
-  };
-}
-
-function renderGeometryEstimates(est){
-  const out = document.getElementById("aiOutput");
-  let html = `<div class="estimate-box"><h3>🧪 Непроверенная оценка по геометрии и значкам</h3>`;
-  html += `<div>Это НЕ данные с таблиц чертежа — ИИ сам замерил и посчитал по картинке, риск ошибки реальный. Обязательно сверь глазами перед отправкой клиенту.</div>`;
-
-  const rows = [
-    ["Периметр теневого профиля", est.perimeter_estimate_m, "м"],
-    ["Кол-во углов/резов профиля", est.corner_count_estimate, "шт"],
-    ["Подсветка потолка (парящий профиль)", sumLen(est.backlight_lines), "м"],
-    ["Треки", sumLen(est.track_lines), "м"],
-    ["Длина световых линий", sumLen(est.light_lines) ?? est.linear_light_length_estimate_m, "м"],
-    ["Ниши под шкаф (брус)", sumLen(est.wardrobe_niches), "м"],
-    ["Углы световых линий", est.linear_light_corners_estimate, "шт"],
-    ["Встраиваемые светильники (закладные)", est.builtin_fixture_count_estimate, "шт"],
-    ["Люстры/подвесные (закладные)", est.pendant_fixture_count_estimate, "шт"],
-  ];
-  const anyRow = rows.some(r => r[1] != null);
-  if (anyRow) {
-    html += `<table style="margin-top:8px;">`;
-    rows.forEach(([label, val, unit]) => {
-      if (val == null) return;
-      html += `<tr><td>${escapeHtml(label)}</td><td>${val} ${unit}</td></tr>`;
-    });
-    html += `</table>`;
-    html += `<div style="margin-top:6px;">Эти числа подставятся оранжевым при клике по соответствующим позициям в справочнике, если для них ещё нет безопасного табличного значения.</div>`;
-  } else {
-    html += `<div style="margin-top:8px;">Даже приблизительно посчитать не смог — впиши эти цифры вручную.</div>`;
-  }
-  const lists = [
-    ["Периметр по зонам", (est.perimeter_by_zone || []).map(z => ({where: z.zone, length_m: z.perimeter_m, basis: z.basis}))],
-    ["Подсветка потолка", est.backlight_lines],
-    ["Треки", est.track_lines],
-    ["Световые линии", est.light_lines],
-    ["Ниши под шкаф", est.wardrobe_niches],
-  ];
-  lists.forEach(([title, arr]) => {
-    if (!Array.isArray(arr) || !arr.length) return;
-    html += `<div style="margin-top:10px;"><strong>${escapeHtml(title)} — откуда цифры:</strong></div><table>`;
-    arr.forEach(x => { html += `<tr><td>${escapeHtml(x.where || "")}</td><td>${r2(x.length_m)} м</td><td class="src">${escapeHtml(x.basis || "")}</td></tr>`; });
-    html += `</table>`;
-  });
-  if (est.confidence_note) html += `<div style="margin-top:8px;font-style:italic;">${escapeHtml(est.confidence_note)}</div>`;
-
-  html += `</div>`;
-  out.innerHTML += html;
-}
-
-function zonesTable(data){
-  const zones = (Array.isArray(data.ceiling_zones) ? data.ceiling_zones : []).filter(z => typeof z.area_sqm === "number");
-  if (!zones.length) return "";
-  let t = `<div class="row" style="margin-top:8px;"><strong>Зоны на плане (${zones.length}):</strong></div>`;
-  t += `<table><tr><th>№</th><th>Материал</th><th>Площадь</th></tr>`;
-  zones.forEach(z => { t += `<tr><td>${z.room_number ?? "—"}</td><td>${escapeHtml(z.material || "не указано")}</td><td>${r2(z.area_sqm)} м²</td></tr>`; });
-  return t + `</table>`;
-}
-
-function renderAiResult(data){
-  const out = document.getElementById("aiOutput");
-  const breakdown = computeCeilingBreakdown(data);
-  let html = `<div class="ai-result"><h3>Черновые данные с чертежа</h3>`;
-  if (Array.isArray(data._usedPages) && data._usedPages.length){
-    html += `<div class="src" style="margin-bottom:6px;">Посчитано по листам: ${pageRanges(data._usedPages.slice())}</div>`;
-  }
-  if (Array.isArray(data._failedPages) && data._failedPages.length){
-    html += `<div class="note">⚠ Листы ${pageRanges(data._failedPages.slice())} не удалось обработать (ошибка сервера) — нажми «Считать» ещё раз или сними с них галочки.</div>`;
-  }
-
-  if (Array.isArray(data.ceiling_material_areas) && data.ceiling_material_areas.length){
-    html += `<div class="row" style="margin-top:8px;"><strong>Площадь по типам отделки потолка (сводная таблица):</strong></div>`;
-    html += `<table><tr><th>Материал</th><th>Площадь</th></tr>`;
-    data.ceiling_material_areas.forEach(m => { html += `<tr><td>${escapeHtml(m.material)}</td><td>${m.area_sqm} м²</td></tr>`; });
-    html += `</table>`;
-    html += `<div class="src">Строка с «натяжной/полотно/ПВХ» подставится в «Полотно» при клике в справочнике.</div>`;
-  }
-
-  if (breakdown.totals.stretch) {
-    html += `<div class="row"><strong>Площадь натяжного потолка (по зонам на плане):</strong> ${breakdown.totals.stretch} м²</div>`;
-    if (data.area_sqm && Math.abs(data.area_sqm - breakdown.totals.stretch) > 0.5) {
-      html += `<div class="note">⚠ Сводная ведомость даёт другую цифру: ${data.area_sqm} м² (${escapeHtml(data.area_source || "")}). Числа разошлись — сверь оба источника на чертеже перед отправкой клиенту.</div>`;
-    }
-    if (breakdown.totals.gkl) html += `<div class="row src">Площадь ГКЛ-потолков (не натяжных): ${breakdown.totals.gkl} м²</div>`;
-
-    html += zonesTable(data);
-  } else if (breakdown.totals.other) {
-    html += `<div class="row"><strong>Площадь зон на плане потолка:</strong> ${breakdown.totals.other} м²</div>`;
-    html += `<div class="note">⚠ У зон подписаны только площади, материал не указан. Если все они — натяжной потолок, это и есть площадь полотна (подставится оранжевым «проверь»). Если какая-то зона — ГКЛ или без потолка, либо маленькая зона нарисована внутри большой (уровень), и её площадь уже входит в большую, поправь количество вручную.</div>`;
-    html += zonesTable(data);
-  } else {
-    const floorOnly = data.area_sqm != null && data.area_source !== "ведомость"
-      && !(Array.isArray(data.ceiling_material_areas) && data.ceiling_material_areas.length)
-      && !(Array.isArray(data.rooms) && data.rooms.some(r => /потолок|потолк|полотн|натяжн/i.test(r.area_kind || "")));
-    if (floorOnly){
-      html += `<div class="row"><strong>Площадь полотна:</strong> не найдено</div>`;
-      html += `<div class="note">⚠ На листах есть только площадь ПОЛА помещений — ${data.area_sqm} м² (${escapeHtml(data.area_source || "")}). Это не площадь натяжного полотна, в «Полотно» она не подставляется. Нужен план потолка или ведомость натяжных потолков.</div>`;
-    } else {
-      html += `<div class="row"><strong>Площадь:</strong> ${data.area_sqm ?? "не найдено"} ${data.area_sqm ? "м²" : ""}`;
-      if (data.area_source) html += ` <span class="src">(${escapeHtml(data.area_source)})</span>`;
-      html += `</div>`;
-    }
-  }
-  if (data.area_note) html += `<div class="note">⚠ ${escapeHtml(data.area_note)}</div>`;
-  if (Array.isArray(data.ceiling_notes) && data.ceiling_notes.length){
-    html += `<div class="row" style="margin-top:8px;"><strong>Пометки на плане потолка:</strong></div><table>`;
-    data.ceiling_notes.forEach(n => { html += `<tr><td>${escapeHtml(n.text || "")}</td><td class="src">${n.count ? "подписей на плане: " + n.count : ""}</td></tr>`; });
-    html += `</table>`;
-    if (!document.getElementById("geometryModeCheckbox").checked &&
-        data.ceiling_notes.some(n => /подсвет|трек|светов|ниш/i.test(n.text || ""))){
-      html += `<div class="src">Это только подписи, не количество. Точно посчитать светильники и измерить подсветку — инструментами «🔢 Считать значки» и «📏 Длина» над чертежом.</div>`;
-    }
-  }
-
-  html += `<div class="row"><strong>Периметр:</strong> ${data.perimeter_m ?? "не найдено"} ${data.perimeter_m ? "м" : ""}`;
-  if (data.perimeter_source) html += ` <span class="src">(${escapeHtml(data.perimeter_source)})</span>`;
-  html += `</div>`;
-
-  html += `<div class="row"><strong>Профиль:</strong> ${data.profile_type ? escapeHtml(data.profile_type) : "не найдено"}</div>`;
-
-  if (Array.isArray(data.ceiling_profiles) && data.ceiling_profiles.length){
-    html += `<div class="row" style="margin-top:8px;"><strong>Потолочные карнизы (длина по маркам):</strong></div>`;
-    html += `<table><tr><th>Марка</th><th>Тип</th><th>Длина</th></tr>`;
-    data.ceiling_profiles.forEach(p => { html += `<tr><td>${escapeHtml(p.mark)}</td><td>${escapeHtml(p.type)}</td><td>${p.length_m} м</td></tr>`; });
-    html += `</table>`;
-    html += `<div class="src">Отсюда посчитаны теневой/стандартный профиль — подставятся автоматически при клике по этим позициям в справочнике.</div>`;
-  } else if (Array.isArray(data.wall_elevation_perimeters) && data.wall_elevation_perimeters.length){
-    let total = 0;
-    html += `<div class="row" style="margin-top:8px;"><strong>Периметр по развёрткам стен (по комнатам):</strong></div>`;
-    html += `<table><tr><th>Помещение</th><th>Периметр</th></tr>`;
-    data.wall_elevation_perimeters.forEach(w => {
-      if (typeof w.perimeter_m === "number") total += w.perimeter_m;
-      html += `<tr><td>${escapeHtml(w.room)}</td><td>${w.perimeter_m} м</td></tr>`;
-    });
-    html += `</table>`;
-    html += `<div class="src">Итого: ${Math.round(total*100)/100} м — подставится в «Монтаж теневого профиля» при клике в справочнике (уточни, если часть стен на самом деле в стандартном профиле).</div>`;
-  }
-
-  if (Array.isArray(data.curtain_cornices) && data.curtain_cornices.length){
-    html += `<div class="row" style="margin-top:8px;"><strong>Карнизы для штор (электрокарниз):</strong></div>`;
-    html += `<table><tr><th>Марка</th><th>Тип</th><th>Длина</th><th>Кол-во</th></tr>`;
-    data.curtain_cornices.forEach(c => { html += `<tr><td>${escapeHtml(c.mark)}</td><td>${escapeHtml(c.type)}</td><td>${c.length_m} м</td><td>${c.qty}</td></tr>`; });
-    html += `</table>`;
-  }
-
-  if (data.fixtures && data.fixtures.length){
-    html += `<div class="row" style="margin-top:8px;"><strong>Спецификация (светильники):</strong></div>`;
-    html += `<table><tr><th>Наименование</th><th>Кол-во</th></tr>`;
-    data.fixtures.forEach(f => { html += `<tr><td>${escapeHtml(f.name)}</td><td>${f.qty}</td></tr>`; });
-    html += `</table>`;
-    html += `<div class="src">⚠ Количество закладных под точечные светильники/люстры на реальном плане может отличаться от этих таблиц — посчитай точки сам по плану электрики, это не заполняется автоматически.</div>`;
-  } else {
-    html += `<div class="row" style="margin-top:8px;"><span class="src">Отдельной таблицы-спецификации не найдено — количество светильников/карнизов впиши сам, глядя на план.</span></div>`;
-  }
-
-  if (data.rooms && data.rooms.length){
-    const isCeilingKind = k => /потолок|потолк|полотн|натяжн/i.test(k || "");
-    const isCeilingTable = data.rooms.some(r => isCeilingKind(r.area_kind));
-
-    // Площадь пола не нужна — показываем таблицу только если она про потолок,
-    // и только если такой разбивки ещё нет из ceiling_zones (не дублируем)
-    if (isCeilingTable && !breakdown.byRoomRows.length) {
-      const total = data.rooms.reduce((s, r) => s + (typeof r.area_sqm === "number" ? r.area_sqm : 0), 0);
-      html += `<div class="row" style="margin-top:8px;"><strong>Помещения (площадь потолка):</strong></div>`;
-      html += `<table><tr><th>Помещение</th><th>Площадь</th></tr>`;
-      data.rooms.forEach(r => { html += `<tr><td>${escapeHtml(r.name)}</td><td>${r.area_sqm} м²</td></tr>`; });
-      html += `</table>`;
-      html += `<div class="src">Итого: ${Math.round(total*100)/100} м² — подставится в «Полотно» при клике в справочнике.</div>`;
-    }
-  }
-
-  html += `<div class="src" style="margin-top:10px;">Площадь полотна, теневой/стандартный профиль и электрокарниз подставятся сами при клике по позиции в справочнике справа (отмечены зелёным) — проверь перед отправкой клиенту. Остальное — вручную.</div>`;
-  html += `</div>`;
-  out.innerHTML = html;
-}
-
-function escapeHtml(str){
-  if (str === undefined || str === null) return "";
-  return String(str).replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
-}
-
-function toast(msg){
-  const t = document.getElementById("toast");
-  t.textContent = msg;
-  t.classList.add("show");
-  setTimeout(() => t.classList.remove("show"), 2200);
-}
-
-// ---------- init ----------
-renderReference();
-restoreDraft();
-renderSmeta();
+init();
 </script>
 </body>
 </html>
