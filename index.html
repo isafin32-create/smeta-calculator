@@ -16,7 +16,9 @@
   h1{font-size:24px;margin:0 0 4px;}
   .subtitle{color:var(--muted);margin:0 0 20px;font-size:14px;}
   .layout{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;}
-  @media(max-width:900px){.layout{grid-template-columns:1fr;}}
+  @media(max-width:900px){.layout{grid-template-columns:minmax(0,1fr);}}
+  .layout > *{min-width:0;}
+  .panel{overflow-x:auto;}
   .panel{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:18px;}
   .panel h2{margin:0 0 12px;font-size:16px;}
   .dropzone{border:2px dashed var(--border);border-radius:8px;padding:28px 12px;text-align:center;cursor:pointer;color:var(--muted);}
@@ -35,6 +37,27 @@
   .sel-summary strong{color:var(--text);}
   .preview{border:1px solid var(--border);border-radius:6px;overflow:auto;max-height:520px;text-align:center;background:#f2f0ea;}
   .preview img{max-width:100%;display:block;margin:0 auto;}
+  .preview .stage{position:relative;margin:0 auto;}
+  .preview .stage img{width:100%;max-width:none;}
+  .preview .stage svg{position:absolute;left:0;top:0;width:100%;height:100%;}
+  .preview.mt-active .stage svg{cursor:crosshair;}
+  .mtool{margin:10px 0 8px;}
+  .mtool-bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
+  .mtool-bar button{background:#fff;border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:13px;}
+  .mtool-bar button.on{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .mtool-bar .zoom{margin-left:auto;display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);}
+  .mtool-bar .zoom button{padding:5px 11px;font-size:15px;}
+  .mtool-hint{font-size:12.5px;color:var(--muted);margin-top:7px;line-height:1.45;}
+  .mtool-hint button{background:#fff;border:1px solid var(--border);border-radius:5px;padding:4px 8px;font-size:12px;margin:4px 6px 0 0;}
+  .layers{margin:10px 0 4px;}
+  .layer{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:7px 8px;border:1px solid var(--border);border-radius:6px;margin-bottom:6px;font-size:13px;background:#fff;}
+  .layer.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset;}
+  .layer .sw{width:12px;height:12px;border-radius:50%;flex:none;}
+  .layer .nm{cursor:pointer;font-weight:600;}
+  .layer .tot{margin-left:auto;font-weight:600;}
+  .layer select{font-size:12px;max-width:200px;}
+  .layer button{background:none;border:1px solid var(--border);border-radius:5px;padding:3px 7px;font-size:12px;}
+  .layers-add button{background:#fff;border:1px dashed var(--border);border-radius:6px;padding:6px 10px;font-size:12.5px;margin-right:6px;}
   .ai-row{display:flex;align-items:center;gap:14px;margin-top:14px;flex-wrap:wrap;}
   button{font-family:inherit;cursor:pointer;}
   .btn-primary{background:var(--accent);color:#fff;border:none;border-radius:6px;padding:10px 16px;font-size:14px;}
@@ -49,7 +72,8 @@
   .ai-result .note{color:#a06a1a;background:#fdf3de;border-radius:4px;padding:6px 8px;margin-top:4px;}
   .ai-result table{width:100%;border-collapse:collapse;margin-top:6px;}
   .ai-result td,.ai-result th{border-bottom:1px solid #d6e8da;padding:4px 6px;text-align:left;font-size:12px;}
-  .top-row{display:flex;gap:10px;margin-bottom:16px;}
+  .top-row{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;}
+  .top-row input{min-width:0;flex:1 1 180px;}
   .top-row input{flex:1;border:1px solid var(--border);border-radius:6px;padding:9px 12px;font-size:14px;}
   .ref-list{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
   .ref-item{display:flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--border);border-radius:20px;padding:8px 14px;font-size:13px;}
@@ -112,7 +136,18 @@
 
     <div class="thumbs" id="thumbs"></div>
     <div class="sel-summary" id="selSummary"></div>
+    <div class="mtool" id="mtool" hidden>
+      <div class="mtool-bar">
+        <button data-mode="view" class="on">✋ Смотреть</button>
+        <button data-mode="count">🔢 Считать значки</button>
+        <button data-mode="length">📏 Длина</button>
+        <button data-mode="scale">📐 Масштаб</button>
+        <span class="zoom"><button id="zoomOut" title="Уменьшить">−</button><span id="zoomVal">100%</span><button id="zoomIn" title="Увеличить">+</button></span>
+      </div>
+      <div class="mtool-hint" id="mtoolHint"></div>
+    </div>
     <div class="preview" id="preview"></div>
+    <div class="layers" id="layers"></div>
 
     <div class="ai-row">
       <button class="btn-primary" id="recognizeBtn" disabled>Считать данные с чертежа (ИИ)</button>
@@ -388,6 +423,7 @@ function renderSmeta(){
       row.qty = qtyInput.value === "" ? null : parseFloat(qtyInput.value);
       row.aiGuessed = false;
       row.aiEstimated = false;
+      row.measured = false;
       qtyInput.className = "qty" + (row.qty === null || isNaN(row.qty) ? " empty" : "");
       renderSmeta();
     };
@@ -397,6 +433,13 @@ function renderSmeta(){
       tag.textContent = " ИИ";
       tag.title = "Подставлено с чертежа — проверь";
       tag.style.cssText = "color:#2c8a4e;font-size:11px;margin-left:4px;";
+      tdQty.appendChild(tag);
+    }
+    if (row.measured) {
+      const tag = document.createElement("span");
+      tag.textContent = " 📐 по чертежу";
+      tag.title = "Посчитано вручную на чертеже инструментом счёта/замера";
+      tag.style.cssText = "color:#1d6fd6;font-size:11px;margin-left:4px;";
       tdQty.appendChild(tag);
     }
     if (row.aiEstimated) {
@@ -440,6 +483,7 @@ function renderSmeta(){
   document.getElementById("totalSum").textContent = total.toLocaleString("ru-RU") + " ₽";
   document.getElementById("unfilledWarn").textContent = unfilled ? ` · не заполнено кол-во: ${unfilled}` : "";
   saveDraft();
+  if (typeof mtRenderLayers === "function" && document.getElementById("layers")) mtRenderLayers();
 }
 
 // ---------- Автосохранение ----------
@@ -609,6 +653,7 @@ async function handleFiles(fileList){
   document.getElementById("aiOutput").innerHTML = "";
   aiDraft = null;
   aiEstimates = null;
+  mtReset();
 
   for (const file of files){
     if (file.type === "application/pdf"){
@@ -819,10 +864,273 @@ async function renderPreview(){
     if (activePage !== idx) return;
     el.innerHTML = "";
   }
+  const stage = document.createElement("div");
+  stage.className = "stage";
+  stage.style.width = (mtZoom * 100) + "%";
   const img = document.createElement("img");
+  img.onload = () => { mtRenderMarks(); };
   img.src = url;
-  el.appendChild(img);
+  stage.appendChild(img);
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.id = "mtSvg";
+  svg.addEventListener("click", mtOnClick);
+  stage.appendChild(svg);
+  el.appendChild(stage);
+  document.getElementById("mtool").hidden = false;
+  mtApplyMode();
 }
+
+// ---------- Ручной счёт и замер на чертеже ----------
+// Точки хранятся в пикселях картинки листа (не экрана), поэтому не зависят от масштаба просмотра.
+const MT_COLORS = ["#d62828", "#1d6fd6", "#2c8a4e", "#c07a1a", "#8e44ad", "#16a085", "#e84393"];
+let mtMode = "view";
+let mtZoom = 1;
+let mtLayers = [];        // {id, name, type:'count'|'length', color, points:[{page,x,y}], lines:[{page,pts:[[x,y]]}], targetRow}
+let mtActiveId = null;
+let mtDraft = null;       // линия, которую сейчас рисуют: {page, pts}
+let mtScaleFirst = null;  // первая точка при задании масштаба
+let mtSeq = 0;
+
+function mtReset(){
+  mtLayers = []; mtActiveId = null; mtDraft = null; mtScaleFirst = null; mtMode = "view"; mtZoom = 1;
+  document.getElementById("layers").innerHTML = "";
+  document.getElementById("mtool").hidden = true;
+}
+const mtActive = () => mtLayers.find(l => l.id === mtActiveId) || null;
+const mtImg = () => document.querySelector("#preview .stage img");
+
+function mtNewLayer(type, name){
+  const def = type === "count" ? "Светильники" : "Подсветка";
+  const n = name || prompt(type === "count" ? "Что считаем? (например: Светильники, Закладные под люстру)" : "Что меряем? (например: Подсветка, Трек, Ниша под шкаф)", def);
+  if (n === null) return null;
+  const layer = {id: ++mtSeq, name: n.trim() || def, type, color: MT_COLORS[(mtSeq - 1) % MT_COLORS.length], points: [], lines: [], targetRow: null};
+  mtLayers.push(layer);
+  mtActiveId = layer.id;
+  return layer;
+}
+
+function mtLayerTotal(l){
+  if (l.type === "count") return l.points.length;
+  let mm = 0;
+  const all = mtDraft && l.id === mtActiveId ? [...l.lines, mtDraft] : l.lines;
+  all.forEach(line => {
+    const s = pages[line.page] && pages[line.page].mmPerPx;
+    if (!s) return;
+    for (let i = 1; i < line.pts.length; i++){
+      mm += Math.hypot(line.pts[i][0] - line.pts[i-1][0], line.pts[i][1] - line.pts[i-1][1]) * s;
+    }
+  });
+  return Math.round(mm / 10) / 100; // метры, 2 знака
+}
+
+function mtSync(l){
+  if (!l.targetRow || !rows.includes(l.targetRow)) return;
+  l.targetRow.qty = mtLayerTotal(l);
+  l.targetRow.aiGuessed = false;
+  l.targetRow.aiEstimated = false;
+  l.targetRow.measured = true;
+  renderSmeta();
+}
+
+function mtSetMode(m){
+  if (mtDraft) mtFinishLine();
+  mtScaleFirst = null;
+  if (m === "count" && (!mtActive() || mtActive().type !== "count")){
+    const ex = mtLayers.filter(l => l.type === "count");
+    if (ex.length) mtActiveId = ex[ex.length - 1].id; else if (!mtNewLayer("count")) return;
+  }
+  if (m === "length"){
+    if (!pages[activePage].mmPerPx){
+      alert("Сначала задай масштаб этого листа: нажми на два конца любого размера на чертеже (например, размерной линии «4150») и впиши это число.");
+      m = "scale";
+    } else if (!mtActive() || mtActive().type !== "length"){
+      const ex = mtLayers.filter(l => l.type === "length");
+      if (ex.length) mtActiveId = ex[ex.length - 1].id; else if (!mtNewLayer("length")) return;
+    }
+  }
+  mtMode = m;
+  mtApplyMode();
+}
+
+function mtApplyMode(){
+  document.querySelectorAll(".mtool-bar button[data-mode]").forEach(b => b.classList.toggle("on", b.dataset.mode === mtMode));
+  document.getElementById("preview").classList.toggle("mt-active", mtMode !== "view");
+  const svg = document.getElementById("mtSvg");
+  if (svg) svg.style.pointerEvents = mtMode === "view" ? "none" : "auto";
+  const p = pages[activePage];
+  const scaleTxt = p && p.mmPerPx ? `Масштаб листа задан ✓` : `Масштаб листа не задан`;
+  const a = mtActive();
+  let hint = "";
+  if (mtMode === "view") hint = `Увеличь чертёж кнопкой «+», чтобы было удобно попадать по значкам. ${scaleTxt}.`;
+  if (mtMode === "count") hint = `Нажимай на каждый значок — «${escapeHtml(a ? a.name : "")}». Повторное нажатие на точку убирает её. Посчитано: <strong>${a ? mtLayerTotal(a) : 0}</strong>.`;
+  if (mtMode === "length") hint = `Нажимай по точкам вдоль линии «${escapeHtml(a ? a.name : "")}» (в каждом повороте). Сейчас: <strong>${a ? mtLayerTotal(a) : 0} м</strong>.<br>
+    <button onclick="mtFinishLine()">✓ Линия готова, следующая</button><button onclick="mtUndoPoint()">↶ Убрать точку</button>`;
+  if (mtMode === "scale") hint = mtScaleFirst
+    ? `Теперь нажми на второй конец этого размера.`
+    : `Нажми на начало любого подписанного размера на чертеже (например, размерной линии с числом 4150), потом на его конец. ${scaleTxt}.`;
+  document.getElementById("mtoolHint").innerHTML = hint;
+  document.getElementById("zoomVal").textContent = Math.round(mtZoom * 100) + "%";
+  mtRenderMarks();
+  mtRenderLayers();
+}
+
+function mtOnClick(e){
+  const img = mtImg();
+  if (!img || !img.naturalWidth) return;
+  const r = img.getBoundingClientRect();
+  const x = (e.clientX - r.left) / r.width * img.naturalWidth;
+  const y = (e.clientY - r.top) / r.height * img.naturalHeight;
+  const k = img.naturalWidth / r.width; // пикселей картинки в одном пикселе экрана
+  const p = pages[activePage];
+
+  if (mtMode === "scale"){
+    if (!mtScaleFirst){ mtScaleFirst = [x, y]; mtApplyMode(); return; }
+    const d = Math.hypot(x - mtScaleFirst[0], y - mtScaleFirst[1]);
+    const v = prompt("Сколько миллиметров между этими точками? Впиши число с чертежа (например, 4150):", "");
+    const mm = parseFloat(String(v || "").replace(",", "."));
+    if (mm > 0 && d > 3){
+      p.mmPerPx = mm / d;
+      p.scaleLine = [mtScaleFirst, [x, y], mm];
+      mtScaleFirst = null;
+      mtLayers.forEach(mtSync);
+      toast("Масштаб задан — теперь можно мерить длины");
+      mtSetMode("length");
+      return;
+    }
+    mtScaleFirst = null; mtApplyMode(); return;
+  }
+  const a = mtActive();
+  if (!a) return;
+  if (mtMode === "count"){
+    const R = 12 * k;
+    const i = a.points.findIndex(pt => pt.page === activePage && Math.hypot(pt.x - x, pt.y - y) < R);
+    if (i >= 0) a.points.splice(i, 1); else a.points.push({page: activePage, x, y});
+  }
+  if (mtMode === "length"){
+    if (mtDraft && mtDraft.page !== activePage) mtFinishLine();
+    if (!mtDraft) mtDraft = {page: activePage, pts: []};
+    mtDraft.pts.push([x, y]);
+  }
+  mtSync(a);
+  mtApplyMode();
+}
+
+function mtFinishLine(){
+  const a = mtActive();
+  if (mtDraft && a && mtDraft.pts.length > 1) a.lines.push(mtDraft);
+  mtDraft = null;
+  if (a) mtSync(a);
+  mtApplyMode();
+}
+function mtUndoPoint(){
+  const a = mtActive();
+  if (mtDraft && mtDraft.pts.length){ mtDraft.pts.pop(); if (!mtDraft.pts.length) mtDraft = null; }
+  else if (a && a.lines.length){ mtDraft = a.lines.pop(); mtDraft.pts.pop(); }
+  if (a) mtSync(a);
+  mtApplyMode();
+}
+
+function mtRenderMarks(){
+  const svg = document.getElementById("mtSvg");
+  const img = mtImg();
+  if (!svg || !img || !img.naturalWidth) return;
+  const W = img.naturalWidth, H = img.naturalHeight;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  const k = W / (img.getBoundingClientRect().width || W);
+  const pg = activePage;
+  let s = "";
+  const p = pages[pg];
+  if (p && p.scaleLine){
+    const [a, b, mm] = p.scaleLine;
+    s += `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="#555" stroke-width="${2*k}" stroke-dasharray="${6*k} ${4*k}"/>`;
+    s += `<text x="${(a[0]+b[0])/2}" y="${(a[1]+b[1])/2 - 6*k}" font-size="${12*k}" fill="#555" text-anchor="middle">масштаб ${mm} мм</text>`;
+  }
+  if (mtScaleFirst) s += `<circle cx="${mtScaleFirst[0]}" cy="${mtScaleFirst[1]}" r="${5*k}" fill="#555"/>`;
+  mtLayers.forEach(l => {
+    if (l.type === "count"){
+      let n = 0;
+      l.points.forEach(pt => {
+        n++;
+        if (pt.page !== pg) return;
+        s += `<circle cx="${pt.x}" cy="${pt.y}" r="${9*k}" fill="${l.color}" fill-opacity=".85" stroke="#fff" stroke-width="${1.5*k}"/>`;
+        s += `<text x="${pt.x}" y="${pt.y + 3.5*k}" font-size="${10*k}" fill="#fff" text-anchor="middle" font-weight="700">${n}</text>`;
+      });
+    } else {
+      const lines = (mtDraft && l.id === mtActiveId) ? [...l.lines, mtDraft] : l.lines;
+      lines.forEach(line => {
+        if (line.page !== pg) return;
+        const pts = line.pts.map(q => q.join(",")).join(" ");
+        s += `<polyline points="${pts}" fill="none" stroke="${l.color}" stroke-width="${4*k}" stroke-opacity=".8" stroke-linejoin="round"/>`;
+        line.pts.forEach(q => { s += `<circle cx="${q[0]}" cy="${q[1]}" r="${4*k}" fill="${l.color}"/>`; });
+      });
+    }
+  });
+  svg.innerHTML = s;
+}
+
+function mtRenderLayers(){
+  const box = document.getElementById("layers");
+  if (!pages.length){ box.innerHTML = ""; return; }
+  box.innerHTML = "";
+  mtLayers.forEach(l => {
+    const div = document.createElement("div");
+    div.className = "layer" + (l.id === mtActiveId ? " active" : "");
+    const tot = mtLayerTotal(l);
+    const opts = rows.map((r, i) => `<option value="${i}" ${l.targetRow === r ? "selected" : ""}>${escapeHtml(r.name)}</option>`).join("");
+    div.innerHTML = `<span class="sw" style="background:${l.color}"></span>
+      <span class="nm" title="Сделать активным">${escapeHtml(l.name)}</span>
+      <select title="В какую строку сметы записать"><option value="">→ в смету…</option>${opts}</select>
+      <span class="tot">${l.type === "count" ? tot + " шт" : tot + " м"}</span>
+      <button data-a="undo" title="Отменить последнее">↶</button>
+      <button data-a="del" title="Удалить">✕</button>`;
+    div.querySelector(".nm").onclick = () => { if (mtDraft) mtFinishLine(); mtActiveId = l.id; mtMode = l.type; mtApplyMode(); };
+    div.querySelector("select").onchange = e => {
+      const i = e.target.value;
+      l.targetRow = i === "" ? null : rows[+i];
+      mtSync(l);
+      if (l.targetRow) toast(`«${l.name}» записывается в «${l.targetRow.name}»`);
+    };
+    div.querySelector('[data-a="undo"]').onclick = () => {
+      if (l.type === "count") l.points.pop();
+      else { if (mtDraft && l.id === mtActiveId) mtDraft = null; else l.lines.pop(); }
+      mtSync(l); mtApplyMode();
+    };
+    div.querySelector('[data-a="del"]').onclick = () => {
+      if (!confirm(`Удалить «${l.name}»?`)) return;
+      mtLayers = mtLayers.filter(x => x !== l);
+      if (mtActiveId === l.id){ mtActiveId = null; mtDraft = null; mtMode = "view"; }
+      mtApplyMode();
+    };
+    box.appendChild(div);
+  });
+  const add = document.createElement("div");
+  add.className = "layers-add";
+  add.innerHTML = `<button data-t="count">+ посчитать другие значки</button><button data-t="length">+ измерить другую линию</button>`;
+  add.querySelector('[data-t="count"]').onclick = () => { if (mtDraft) mtFinishLine(); if (mtNewLayer("count")){ mtMode = "count"; mtApplyMode(); } };
+  add.querySelector('[data-t="length"]').onclick = () => {
+    if (mtDraft) mtFinishLine();
+    if (!pages[activePage].mmPerPx){ mtSetMode("length"); return; }
+    if (mtNewLayer("length")){ mtMode = "length"; mtApplyMode(); }
+  };
+  box.appendChild(add);
+}
+
+document.querySelectorAll(".mtool-bar button[data-mode]").forEach(b => b.onclick = () => mtSetMode(b.dataset.mode));
+function mtSetZoom(z){
+  const el = document.getElementById("preview");
+  const cx = (el.scrollLeft + el.clientWidth / 2) / (el.scrollWidth || 1);
+  const cy = (el.scrollTop + el.clientHeight / 2) / (el.scrollHeight || 1);
+  mtZoom = Math.min(6, Math.max(1, z));
+  const st = document.querySelector("#preview .stage");
+  if (st) st.style.width = (mtZoom * 100) + "%";
+  requestAnimationFrame(() => {
+    el.scrollLeft = cx * el.scrollWidth - el.clientWidth / 2;
+    el.scrollTop = cy * el.scrollHeight - el.clientHeight / 2;
+    mtApplyMode();
+  });
+}
+document.getElementById("zoomIn").onclick = () => mtSetZoom(mtZoom * 1.5);
+document.getElementById("zoomOut").onclick = () => mtSetZoom(mtZoom / 1.5);
 
 // ---------- Сервер распознавания ----------
 document.getElementById("serverBtn").onclick = () => {
@@ -1222,11 +1530,11 @@ function renderAiResult(data){
   if (data.area_note) html += `<div class="note">⚠ ${escapeHtml(data.area_note)}</div>`;
   if (Array.isArray(data.ceiling_notes) && data.ceiling_notes.length){
     html += `<div class="row" style="margin-top:8px;"><strong>Пометки на плане потолка:</strong></div><table>`;
-    data.ceiling_notes.forEach(n => { html += `<tr><td>${escapeHtml(n.text || "")}</td><td>${n.count ? n.count + " шт" : ""}</td></tr>`; });
+    data.ceiling_notes.forEach(n => { html += `<tr><td>${escapeHtml(n.text || "")}</td><td class="src">${n.count ? "подписей на плане: " + n.count : ""}</td></tr>`; });
     html += `</table>`;
     if (!document.getElementById("geometryModeCheckbox").checked &&
         data.ceiling_notes.some(n => /подсвет|трек|светов|ниш/i.test(n.text || ""))){
-      html += `<div class="src">Длины подсветки, треков и ниш можно оценить по размерам — включи «Экспериментально» и нажми «Считать» ещё раз.</div>`;
+      html += `<div class="src">Это только подписи, не количество. Точно посчитать светильники и измерить подсветку — инструментами «🔢 Считать значки» и «📏 Длина» над чертежом.</div>`;
     }
   }
 
