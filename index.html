@@ -322,6 +322,13 @@ let aiEstimates = null; // непроверенные геометрически
 
 const SHADOW_NAME = "Монтаж теневого профиля Еврокраб, натяжка полотна в теневой профиль";
 const STD_NAME = "Монтаж стандартного профиля со вставкой, натяжка полотна в стандартный профиль";
+function areaRulePct(){ return profileReserve() || 20; }
+function nicheSum(re, notRe){
+  const arr = (lastAiData && Array.isArray(lastAiData.niches)) ? lastAiData.niches : [];
+  const sel = arr.filter(n => typeof n.length_m === "number" && re.test(n.kind || "") && !(notRe && notRe.test(n.kind || "")));
+  if (!sel.length) return null;
+  return r2(sel.reduce((a, n) => a + n.length_m, 0));
+}
 function withReserve(m){ return m == null ? null : Math.round(m * (1 + profileReserve() / 100) * 100) / 100; }
 
 function guessQty(item){
@@ -334,6 +341,16 @@ function guessQty(item){
   if (name === SHADOW_NAME){
     if (aiDraft && aiDraft.profileFromTable && aiDraft.shadowProfileLen != null) return { qty: aiDraft.shadowProfileLen, estimated: false };
     if (pdfFacts.perimeter) return { qty: withReserve(pdfFacts.perimeter), estimated: false, pdf: true, perim: true };
+  }
+  if (name === SHADOW_NAME && !pdfFacts.perimeter){
+    const area = pdfFacts.roomsSum || (aiDraft && aiDraft.area_sqm);
+    if (area) return { qty: Math.round(area * (1 + areaRulePct() / 100) * 100) / 100, estimated: true, perim: true, areaRule: true };
+  }
+  if (name === "Монтаж встроенного карниза" && nicheSum(/штор|карниз|пк-?14|ам-?1/i, /электро|люмфер/i) != null){
+    return { qty: nicheSum(/штор|карниз|пк-?14|ам-?1/i, /электро|люмфер/i), estimated: true };
+  }
+  if ((name === "Монтаж электрокарниза" || name === "Монтаж профиля Сигма для ниши под электрокарниз") && nicheSum(/электро|люмфер/i) != null){
+    return { qty: nicheSum(/электро|люмфер/i), estimated: true };
   }
   if (name === "Запил, стык, обработка углов профиля" && pdfFacts.wallsCount && !(aiEstimates?.corner_count_estimate != null)){
     return { qty: pdfFacts.wallsCount, estimated: true, pdf: true };
@@ -553,7 +570,7 @@ document.getElementById("profileReserve").addEventListener("input", e => {
   const v = parseFloat(e.target.value);
   localStorage.setItem(LS_RESERVE, v > 0 ? String(v) : "0");
   // пересчитать строки профиля, заполненные автоматически по периметру
-  rows.forEach(r => { if (r.autoPerim && pdfFacts.perimeter) r.qty = withReserve(pdfFacts.perimeter); });
+  rows.forEach(r => { if (r.autoPerim){ const g = guessQty({name: r.name}); if (g.qty != null) r.qty = g.qty; } });
   renderSmeta();
   renderSelectionSummary();
 });
@@ -836,9 +853,11 @@ function pdfFactsHtml(){
   let s = `<div style="margin-top:6px;padding:8px 10px;background:#eef7f1;border:1px solid #cfe6d7;border-radius:6px;color:var(--text);">
     <strong>Точно из текста PDF (без ИИ):</strong>`;
   if (pdfFacts.roomsSum) s += `<br>• площадь помещений: <strong>${pdfFacts.roomsSum} м²</strong> (${pdfFacts.roomsCount} помещ., лист ${pdfFacts.roomsPage}) → «Полотно»`;
+  if (pdfFacts.roomsSum && !pdfFacts.perimeter) s += `<br>• профиль по правилу «площадь + ${areaRulePct()}%»: <strong>${Math.round(pdfFacts.roomsSum * (1 + areaRulePct()/100) * 100)/100} м</strong> (оценка — развёрток в проекте нет)`;
   if (pdfFacts.perimeter){
     s += `<br>• периметр по развёрткам: <strong>${pdfFacts.perimeter} м</strong>${profileReserve() ? ` (+${profileReserve()}% запас = ${withReserve(pdfFacts.perimeter)} м)` : ""} → «Теневой профиль»`;
     s += `<br>• стен на развёртках: ${pdfFacts.wallsCount} → «Углы» (оценка, проверь)`;
+    if (pdfFacts.roomsSum) s += `<br><span class="src">для сравнения, по правилу «площадь + ${areaRulePct()}%»: ${Math.round(pdfFacts.roomsSum * (1 + areaRulePct()/100) * 100)/100} м</span>`;
     s += `<details style="margin-top:4px;"><summary style="cursor:pointer;">по помещениям</summary>${pdfFacts.elevRooms.map(r => `${escapeHtml(r.room)} — ${r.m} м (${r.walls} стен)`).join("<br>")}</details>`;
   }
   return s + `</div>`;
@@ -1387,6 +1406,8 @@ function mergeResults(list){
     ceiling_zones: z => `${z.room_number}|${(z.material||"").toLowerCase()}|${z.area_sqm}`,
     wall_elevation_perimeters: w => `${(w.room||"").toLowerCase()}|${w.perimeter_m}`,
     ceiling_notes: n => (n.text||"").toLowerCase(),
+    niches: n => `${(n.kind||"").toLowerCase()}|${(n.where||"").toLowerCase()}|${n.length_m}`,
+    labeled_items: n => `${(n.name||"").toLowerCase()}|${(n.where||"").toLowerCase()}|${n.qty}`,
   };
   Object.keys(arrays).forEach(k => {
     const seen = new Set();
@@ -1516,6 +1537,7 @@ function computeCeilingBreakdown(data){
 
   zones.forEach(z => {
     if (typeof z.area_sqm !== "number") return;
+    if (z.nested) return; // короб/уровень внутри большой зоны — уже входит в неё
     any = true;
     const mat = (z.material || "").toLowerCase();
     const key = z.room_number ?? "—";
@@ -1594,18 +1616,43 @@ function renderGeometryEstimates(est){
   out.innerHTML += html;
 }
 
+// Таблица найденных позиций: у каждой — выбор строки сметы, куда записать количество
+let pickItems = [];
+function pickTable(title, items){
+  items = items.filter(x => x && x.name);
+  if (!items.length) return "";
+  let t = `<div class="row" style="margin-top:10px;"><strong>${escapeHtml(title)}:</strong></div><table>`;
+  items.forEach(x => {
+    const id = pickItems.push(x) - 1;
+    const opts = rows.map((r, i) => `<option value="${i}">${escapeHtml(r.name)}</option>`).join("");
+    t += `<tr><td>${escapeHtml(x.name)}${x.where ? `<div class="src">${escapeHtml(x.where)}</div>` : ""}</td>
+      <td style="white-space:nowrap">${x.qty != null ? r2(x.qty) + " " + escapeHtml(x.unit || "") : "—"}${x.basis ? `<div class="src">${escapeHtml(x.basis)}</div>` : ""}</td>
+      <td>${x.qty != null ? `<select onchange="pickToRow(${id}, this)"><option value="">→ в смету…</option>${opts}</select>` : ""}</td></tr>`;
+  });
+  return t + `</table><div class="src">Если строки нет в смете — сначала добавь её из справочника, потом выбери тут.</div>`;
+}
+function pickToRow(id, sel){
+  const x = pickItems[id]; const r = rows[+sel.value];
+  if (!x || !r) return;
+  r.qty = r2(x.qty); r.aiGuessed = false; r.aiEstimated = true; r.measured = false; r.fromPdf = false;
+  renderSmeta();
+  toast(`«${x.name}» → «${r.name}»`);
+  sel.value = "";
+}
+
 function zonesTable(data){
   const zones = (Array.isArray(data.ceiling_zones) ? data.ceiling_zones : []).filter(z => typeof z.area_sqm === "number");
   if (!zones.length) return "";
   let t = `<div class="row" style="margin-top:8px;"><strong>Зоны на плане (${zones.length}):</strong></div>`;
   t += `<table><tr><th>№</th><th>Материал</th><th>Площадь</th></tr>`;
-  zones.forEach(z => { t += `<tr><td>${z.room_number ?? "—"}</td><td>${escapeHtml(z.material || "не указано")}</td><td>${r2(z.area_sqm)} м²</td></tr>`; });
+  zones.forEach(z => { t += `<tr${z.nested ? ' style="color:var(--muted)"' : ""}><td>${z.room_number ?? "—"}</td><td>${escapeHtml(z.material || "не указано")}${z.nested ? " (внутри другой зоны — уже входит в неё)" : ""}</td><td>${r2(z.area_sqm)} м²</td></tr>`; });
   return t + `</table>`;
 }
 
 function renderAiResult(data){
   const out = document.getElementById("aiOutput");
   const breakdown = computeCeilingBreakdown(data);
+  pickItems = [];
   let html = `<div class="ai-result"><h3>Черновые данные с чертежа</h3>`;
   if (pdfFacts.roomsSum || pdfFacts.perimeter){
     html += `<div class="note" style="background:#eef7f1;border-color:#cfe6d7;color:var(--text);">В смету уже подставлены точные числа из текста PDF: ${pdfFacts.roomsSum ? `полотно ${pdfFacts.roomsSum} м²` : ""}${pdfFacts.roomsSum && pdfFacts.perimeter ? ", " : ""}${pdfFacts.perimeter ? `профиль ${withReserve(pdfFacts.perimeter)} м` : ""}. Цифры ИИ ниже — для справки.</div>`;
@@ -1651,6 +1698,8 @@ function renderAiResult(data){
     }
   }
   if (data.area_note) html += `<div class="note">⚠ ${escapeHtml(data.area_note)}</div>`;
+  html += pickTable("Ниши (п.м.)", (data.niches || []).map(n => ({name: n.kind, qty: n.length_m, unit: "м", where: n.where, basis: n.basis})));
+  html += pickTable("Подписанные в проекте позиции", (data.labeled_items || []).map(n => ({name: n.name, qty: n.qty, unit: n.unit || "", where: n.where, basis: n.basis})));
   if (Array.isArray(data.ceiling_notes) && data.ceiling_notes.length){
     html += `<div class="row" style="margin-top:8px;"><strong>Пометки на плане потолка:</strong></div><table>`;
     data.ceiling_notes.forEach(n => { html += `<tr><td>${escapeHtml(n.text || "")}</td><td class="src">${n.count ? "подписей на плане: " + n.count : ""}</td></tr>`; });
